@@ -10,6 +10,12 @@ FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS to
 ARG DEBIAN_APT_MIRROR=http://deb.debian.org/debian
 ARG DEBIAN_SECURITY_APT_MIRROR=http://deb.debian.org/debian-security
 ARG LLVM_APT_MIRROR=https://apt.llvm.org
+ARG RUSTUP_DIST_SERVER=https://static.rust-lang.org
+ARG RUSTUP_UPDATE_ROOT=https://static.rust-lang.org/rustup
+ARG RUSTUP_TOOLCHAIN=1.92.0
+ENV RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER}
+ENV RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT}
+ENV RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN}
 
 # Prevent deletion of apt cache
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
@@ -99,7 +105,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Set up Rust toolchain
 WORKDIR /app
 COPY ./rust-toolchain.toml .
-RUN rustc --version \
+RUN rustup toolchain install "${RUSTUP_TOOLCHAIN}" --profile minimal \
+    && rustc --version \
     && xx-cargo --setup-target-triple
 
 # Build binary
