@@ -52,6 +52,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y \
     pkg-config make jq \
     ca-certificates curl git gnupg \
+    pax-utils \
     file
     # golang cmake
 
@@ -81,25 +82,6 @@ RUN <<EOF
     ln -s /usr/bin/lld-${LLVM_VERSION} /usr/bin/lld
     ln -s /usr/bin/lld-link-${LLVM_VERSION} /usr/bin/lld-link
     ln -s /usr/bin/wasm-ld-${LLVM_VERSION} /usr/bin/wasm-ld
-EOF
-
-# Developer tool versions
-# renovate: datasource=github-releases depName=cargo-bins/cargo-binstall
-ENV BINSTALL_VERSION=1.18.1
-# renovate: datasource=github-releases depName=psastras/sbom-rs
-ENV CARGO_SBOM_VERSION=0.9.1
-# renovate: datasource=crate depName=lddtree
-ENV LDDTREE_VERSION=0.5.0
-# renovate: datasource=crate depName=timelord-cli
-ENV TIMELORD_VERSION=3.0.1
-
-# Install unpackaged tools
-RUN <<EOF
-    set -o xtrace
-    curl --retry 5 -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-    cargo binstall --no-confirm cargo-sbom --version $CARGO_SBOM_VERSION
-    cargo binstall --no-confirm lddtree --version $LDDTREE_VERSION
-    cargo binstall --no-confirm timelord-cli --version $TIMELORD_VERSION
 EOF
 
 # Set up xx (cross-compilation scripts)
@@ -176,8 +158,12 @@ COPY . .
 
 # Restore timestamps from timelord cache if available
 RUN --mount=type=cache,target=/timelord/ \
-    echo "Restoring timestamps from timelord cache"; \
-    timelord sync --source-dir /app --cache-dir /timelord;
+    if command -v timelord >/dev/null 2>&1; then \
+        echo "Restoring timestamps from timelord cache"; \
+        timelord sync --source-dir /app --cache-dir /timelord; \
+    else \
+        echo "Skipping timelord timestamp restore"; \
+    fi
 
 ARG TARGETPLATFORM
 
@@ -244,6 +230,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     bash <<'EOF'
     set -o xtrace
     mkdir /out/sbom
+    if ! cargo sbom --help >/dev/null 2>&1; then
+        echo "cargo-sbom is not installed; skipping SBOM generation"
+        exit 0
+    fi
     typeset -A PACKAGES
     for BINARY in /out/sbin/*; do
         BINARY_BASE=$(basename ${BINARY})
