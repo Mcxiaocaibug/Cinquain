@@ -18,6 +18,10 @@ Provide the smallest realistic production deployment for a Matrix homeserver:
 ./install.sh
 ```
 
+The default `.env.example` now pulls the prebuilt image from
+`ghcr.io/mcxiaocaibug/cinquain:main`. Set `CINQUAIN_BUILD_LOCALLY=1` if you
+want to build from source on the target machine instead.
+
 ## Required Operator Decisions
 
 - `CINQUAIN_SERVER_NAME`
@@ -44,4 +48,5 @@ Provide the smallest realistic production deployment for a Matrix homeserver:
 - `continuwuity-resolv.conf`: recommended DNS resolvers for federation traffic
 - `install.sh`: preflight and deployment entrypoint
 - `doctor.sh`: post-install verification checks
+- `release-image.sh`: local image build and push helper
 - `site/`: branded landing and support pages served by Caddy

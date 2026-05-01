@@ -41,9 +41,10 @@ cp .env.example .env</code></pre>
                     <pre><code>./install.sh</code></pre>
                 </div>
                 <p>
-                    The curated stack starts Caddy, the homeserver, persistent volumes, TLS handling,
-                    and Matrix discovery with one command.
+                    The curated stack pulls the prebuilt GHCR image by default, then starts Caddy,
+                    the homeserver, persistent volumes, TLS handling, and Matrix discovery with one command.
                 </p>
+                <p>If you want to build from source on the host instead, set <code>CINQUAIN_BUILD_LOCALLY=1</code> in <code>.env</code>.</p>
             </section>
 
             <section class="panel">

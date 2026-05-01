@@ -59,6 +59,7 @@ easy-to-deploy Matrix server built on top of Continuwuity.
 
 - [ ] Test the deployment kit against fresh machines and different DNS layouts.
 - [ ] Add automated docs/build validation for Cinquain assets.
+- [x] Automate multi-arch Docker image publishing for packaged deployments.
 - [ ] Add versioned release notes and upgrade notes for packaged deployments.
 - [x] Define branding, release naming, and image publishing entrypoint.
 

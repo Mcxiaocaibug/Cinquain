@@ -41,7 +41,7 @@
                 <h2>Start the stack in three steps.</h2>
                 <ol class="steps">
                     <li>Copy <code>.env.example</code> to <code>.env</code> and set your domain and operator email values.</li>
-                    <li>Run <code>./install.sh</code> from the <code>cinquain/</code> directory.</li>
+                    <li>Run <code>./install.sh</code> from the <code>cinquain/</code> directory to pull the curated GHCR image and start the stack.</li>
                     <li>Open <a href="/bootstrap"><code>/bootstrap</code></a>, use the generated bootstrap secret, and create the first administrator.</li>
                 </ol>
                 <div class="command-card">
@@ -77,10 +77,14 @@ cp .env.example .env
 
             <section class="panel">
                 <p class="panel__eyebrow">Release path</p>
-                <h2>Local build or prebuilt image</h2>
+                <h2>Prebuilt by default, local build optional</h2>
                 <div class="command-card">
-                    <p class="status-card__label">Publish image</p>
+                    <p class="status-card__label">Image sources</p>
                     <pre><code>cd cinquain
+CINQUAIN_BUILD_LOCALLY=0
+ghcr.io/mcxiaocaibug/cinquain:main
+
+# Optional local publish helper
 ./release-image.sh ghcr.io/your-org/cinquain:0.1.0</code></pre>
                 </div>
             </section>
