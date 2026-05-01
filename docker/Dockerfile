@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 ARG RUST_VERSION=1
 ARG DEBIAN_VERSION=bookworm
 
