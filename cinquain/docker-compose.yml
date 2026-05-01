@@ -2,6 +2,9 @@ services:
     caddy:
         image: docker.io/caddy:latest
         restart: unless-stopped
+        environment:
+            CINQUAIN_SERVER_NAME: ${CINQUAIN_SERVER_NAME}
+            CINQUAIN_ACME_EMAIL: ${CINQUAIN_ACME_EMAIL}
         ports:
             - 80:80
             - 443:443
