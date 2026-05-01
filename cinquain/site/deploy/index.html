@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinquain Deploy</title>
+    <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+    <div class="page-shell page-shell--narrow">
+        <header class="support-header">
+            <p class="eyebrow">Deploy guide</p>
+            <h1>Bring up Cinquain on <span data-server-name>your domain</span> without assembling the network by hand.</h1>
+            <p class="lede">
+                This page is part of the product surface. It is meant to replace “go read scattered docs”
+                with one direct operator path.
+            </p>
+        </header>
+
+        <main class="stack">
+            <section class="panel">
+                <p class="panel__eyebrow">Step 1</p>
+                <h2>Prepare the environment file</h2>
+                <div class="command-card">
+                    <pre><code>cd cinquain
+cp .env.example .env</code></pre>
+                </div>
+                <p>Fill these values before first boot:</p>
+                <ul class="link-list">
+                    <li><code>CINQUAIN_SERVER_NAME</code></li>
+                    <li><code>CINQUAIN_ACME_EMAIL</code></li>
+                    <li><code>CINQUAIN_SUPPORT_EMAIL</code></li>
+                </ul>
+                <p><code>./install.sh</code> will generate <code>CINQUAIN_BOOTSTRAP_SECRET</code> automatically if it is empty.</p>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Step 2</p>
+                <h2>Run the one-command installer</h2>
+                <div class="command-card">
+                    <pre><code>./install.sh</code></pre>
+                </div>
+                <p>
+                    The curated stack starts Caddy, the homeserver, persistent volumes, TLS handling,
+                    and Matrix discovery with one command.
+                </p>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Step 3</p>
+                <h2>Create the first administrator in the runtime</h2>
+                <div class="command-card">
+                    <pre><code>https://your-domain/bootstrap</code></pre>
+                </div>
+                <p>
+                    Use the bootstrap secret stored in <code>.env</code> to unlock the guided setup
+                    page, then choose the username and password for the first administrator account.
+                </p>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Step 4</p>
+                <h2>Verify the runtime</h2>
+                <div class="command-card">
+                    <pre><code>./doctor.sh</code></pre>
+                </div>
+                <p>Then visit these routes:</p>
+                <ul class="link-list">
+                    <li><a href="/bootstrap">/bootstrap</a></li>
+                    <li><a href="/support">/support</a></li>
+                    <li><a href="/_continuwuity/">/_continuwuity/</a></li>
+                    <li><a href="/.well-known/matrix/client">/.well-known/matrix/client</a></li>
+                    <li><a href="/.well-known/matrix/server">/.well-known/matrix/server</a></li>
+                </ul>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Operations</p>
+                <h2>Backup, upgrade, publish</h2>
+                <div class="command-card">
+                    <pre><code>./backup.sh
+./upgrade.sh
+./release-image.sh ghcr.io/your-org/cinquain:0.1.0</code></pre>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/assets/app.js"></script>
+</body>
+</html>

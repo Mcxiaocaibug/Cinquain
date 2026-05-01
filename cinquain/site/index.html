@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinquain</title>
+    <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero">
+            <div class="hero__copy">
+                <p class="eyebrow">One-command Matrix deployment</p>
+                <h1>Deploy Cinquain on <span data-server-name>your domain</span> with one curated Docker stack.</h1>
+                <p class="lede">
+                    Cinquain packages the Continuwuity core into a tighter self-hosting product.
+                    The default stack owns the database, TLS, reverse proxy, `.well-known`, and
+                    operator web surface so you do not have to assemble the network yourself first.
+                </p>
+                <div class="hero__actions">
+                    <a class="button button--primary" href="/deploy/">Open deploy guide</a>
+                    <a class="button button--secondary" href="/support">Open operator support</a>
+                </div>
+            </div>
+            <aside class="hero__panel">
+                <div class="status-card">
+                    <p class="status-card__label">Managed automatically</p>
+                    <ul class="status-list">
+                        <li>Embedded RocksDB persistence</li>
+                        <li>Caddy-managed TLS</li>
+                        <li>Client and federation discovery</li>
+                        <li>Operator support pages</li>
+                    </ul>
+                </div>
+            </aside>
+        </header>
+
+        <main class="content-grid">
+            <section class="panel">
+                <p class="panel__eyebrow">Deploy flow</p>
+                <h2>Start the stack in three steps.</h2>
+                <ol class="steps">
+                    <li>Copy <code>.env.example</code> to <code>.env</code> and set your domain and operator email values.</li>
+                    <li>Run <code>./install.sh</code> from the <code>cinquain/</code> directory.</li>
+                    <li>Open <a href="/bootstrap"><code>/bootstrap</code></a>, use the generated bootstrap secret, and create the first administrator.</li>
+                </ol>
+                <div class="command-card">
+                    <p class="status-card__label">Primary command</p>
+                    <pre><code>cd cinquain
+cp .env.example .env
+./install.sh</code></pre>
+                </div>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">What you get</p>
+                <h2>The default stack already includes the hard parts.</h2>
+                <ul class="link-list">
+                    <li>Caddy on ports 80 and 443</li>
+                    <li>Homeserver routing and `.well-known` discovery</li>
+                    <li>Persistent RocksDB and Caddy volumes</li>
+                    <li>Backup, upgrade, and release helper scripts</li>
+                </ul>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Operator routes</p>
+                <h2>Runtime surfaces after deploy</h2>
+                <ul class="link-list">
+                    <li><a href="/bootstrap">/bootstrap</a></li>
+                    <li><a href="/support">/support</a></li>
+                    <li><a href="/_continuwuity/">/_continuwuity/</a></li>
+                    <li><a href="/.well-known/matrix/client">/.well-known/matrix/client</a></li>
+                    <li><a href="/.well-known/matrix/server">/.well-known/matrix/server</a></li>
+                </ul>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Release path</p>
+                <h2>Local build or prebuilt image</h2>
+                <div class="command-card">
+                    <p class="status-card__label">Publish image</p>
+                    <pre><code>cd cinquain
+./release-image.sh ghcr.io/your-org/cinquain:0.1.0</code></pre>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/assets/app.js"></script>
+</body>
+</html>

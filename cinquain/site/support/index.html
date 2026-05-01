@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinquain Support</title>
+    <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+    <div class="page-shell page-shell--narrow">
+        <header class="support-header">
+            <p class="eyebrow">Support</p>
+            <h1>Cinquain operator guide for <span data-server-name>this server</span>.</h1>
+            <p class="lede">
+                This page is meant for the server operator after the stack is online. It complements
+                the deployment scripts with a short checklist and verification targets.
+            </p>
+        </header>
+
+        <main class="stack">
+            <section class="panel">
+                <p class="panel__eyebrow">Operator checklist</p>
+                <h2>Bring the server to ready state</h2>
+                <ol class="steps">
+                    <li>Wait for TLS issuance to complete on first boot.</li>
+                    <li>Open <a href="/bootstrap"><code>/bootstrap</code></a> and create the first administrator if first-run is still active.</li>
+                    <li>Run <code>./doctor.sh</code> in the Cinquain deployment directory.</li>
+                    <li>Log in with the administrator account you created and confirm you can sync.</li>
+                    <li>Visit the `.well-known` endpoints and confirm discovery is live.</li>
+                </ol>
+                <div class="command-card">
+                    <p class="status-card__label">Common commands</p>
+                    <pre><code>./doctor.sh
+./backup.sh
+./upgrade.sh</code></pre>
+                </div>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Expected URLs</p>
+                <h2>Verification targets</h2>
+                <ul class="link-list">
+                    <li><a href="/">Landing page</a></li>
+                    <li><a href="/deploy/">Deploy guide</a></li>
+                    <li><a href="/bootstrap">Bootstrap route</a></li>
+                    <li><a href="/.well-known/matrix/client">Matrix client discovery</a></li>
+                    <li><a href="/.well-known/matrix/server">Matrix federation discovery</a></li>
+                    <li><a href="/_matrix/client/versions">Client API versions</a></li>
+                </ul>
+            </section>
+
+            <section class="panel">
+                <p class="panel__eyebrow">Identity</p>
+                <h2>Important constraint</h2>
+                <p>
+                    The configured Matrix server name should be treated as permanent after first
+                    deployment. Changing it later is not a routine rename; it changes the identity
+                    surface of the homeserver.
+                </p>
+            </section>
+        </main>
+    </div>
+
+    <script src="/assets/app.js"></script>
+</body>
+</html>

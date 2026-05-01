@@ -1,11 +1,125 @@
 .project-name {
     text-decoration: none;
-    background: linear-gradient(
-        130deg,
-        oklch(from var(--c1) var(--name-lightness) c h),
-        oklch(from var(--c2) var(--name-lightness) c h)
-    );
+    background: linear-gradient(130deg, var(--c2), var(--c1));
     background-clip: text;
     color: transparent;
-    filter: brightness(1.2);
+}
+
+.page-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+    gap: 1.2rem;
+    align-items: stretch;
+}
+
+.hero-panel {
+    padding: 1.8rem;
+}
+
+.eyebrow {
+    margin: 0 0 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--c2);
+}
+
+.lede {
+    max-width: 46rem;
+    color: var(--secondary);
+    font-size: 1.06rem;
+    line-height: 1.78;
+}
+
+.actions {
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    margin-top: 1.4rem;
+}
+
+.button-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.9rem;
+    padding: 0.8rem 1.15rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.button-link.primary {
+    color: #fff;
+    background: linear-gradient(135deg, var(--c1), color-mix(in oklab, var(--c1) 64%, var(--c3)));
+}
+
+.button-link.secondary {
+    color: var(--text-color);
+    background: color-mix(in oklab, var(--panel-bg) 90%, transparent);
+    border: 1px solid var(--panel-border);
+}
+
+.stat-list,
+.endpoint-list,
+.checklist {
+    padding-left: 1.2rem;
+    margin: 0;
+    line-height: 1.8;
+}
+
+.support-stack {
+    display: grid;
+    gap: 1rem;
+}
+
+.subpanel {
+    border-radius: calc(var(--border-radius-lg) - 8px);
+    border: 1px solid var(--panel-border);
+    background: color-mix(in oklab, var(--panel-bg) 88%, transparent);
+    padding: 1rem 1.05rem;
+}
+
+.subpanel p:first-child {
+    margin-top: 0;
+}
+
+.subpanel p:last-child {
+    margin-bottom: 0;
+}
+
+.code-block {
+    margin: 0.9rem 0 0;
+}
+
+.code-block code {
+    display: block;
+    overflow-x: auto;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    background: color-mix(in oklab, var(--panel-bg) 76%, transparent);
+    border: 1px solid var(--panel-border);
+    color: var(--text-color);
+    font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (max-width: 860px) {
+    .page-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .hero-panel {
+        padding: 1.1rem;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+
+    .button-link {
+        width: 100%;
+    }
 }

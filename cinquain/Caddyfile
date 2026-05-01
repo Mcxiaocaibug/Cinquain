@@ -1,0 +1,25 @@
+{
+    email {$CINQUAIN_ACME_EMAIL}
+}
+
+{$CINQUAIN_SERVER_NAME} {
+    encode zstd gzip
+
+    @matrix path /bootstrap /bootstrap/* /.well-known/matrix/* /_matrix/* /_continuwuity/*
+    handle @matrix {
+        reverse_proxy homeserver:8008
+    }
+
+    @support path /support /support/*
+    handle @support {
+        root * /srv
+        rewrite * /support/index.html
+        file_server
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

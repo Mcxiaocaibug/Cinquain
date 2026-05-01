@@ -1,0 +1,81 @@
+{% extends "_layout.html.j2" %}
+
+{%- block head -%}
+<link rel="stylesheet" href="/_continuwuity/resources/index.css">
+{%- endblock -%}
+
+{%- block title -%}
+Cinquain Support
+{%- endblock -%}
+
+{%- block content -%}
+<div class="support-stack">
+    <section class="panel hero-panel">
+        <p class="eyebrow">Support</p>
+        <h1>Operator guide for <span class="project-name">{{ server_name }}</span>.</h1>
+        <p class="lede">
+            This built-in support page is the runtime companion to the server itself. Use it to
+            verify the expected URLs, understand the first-run state, and confirm what should be
+            working before you call the deployment finished.
+        </p>
+    </section>
+
+    <section class="panel">
+        <p class="eyebrow">Checklist</p>
+        <h2>Expected operator actions</h2>
+        <ol class="checklist">
+            {%- if first_run %}
+                {%- if bootstrap_required %}
+            <li>Open <a href="/bootstrap"><code>/bootstrap</code></a> and finish the guided first administrator setup.</li>
+                {%- else %}
+            <li>Check the startup logs and complete the initial account bootstrap.</li>
+                {%- endif %}
+            <li>Visit the discovery endpoints below and make sure they resolve from your public domain.</li>
+            <li>Once the first account exists, sign in and validate client sync.</li>
+            {%- else %}
+            <li>Sign in with a Matrix client using <code>{{ server_name }}</code> as the homeserver.</li>
+            <li>Verify the well-known endpoints and client versions endpoint.</li>
+            <li>Run any packaged health checks from your deployment wrapper.</li>
+            {%- endif %}
+        </ol>
+        {%- if first_run && bootstrap_required %}
+        <div class="subpanel">
+            <p class="eyebrow">Bootstrap route</p>
+            <p>
+                The guided setup is available at <a href="/bootstrap"><code>/bootstrap</code></a>.
+                It only remains active while the homeserver is still waiting for the first administrator.
+            </p>
+        </div>
+        {%- endif %}
+    </section>
+
+    <section class="panel">
+        <p class="eyebrow">Verification</p>
+        <h2>Useful runtime routes</h2>
+        <div class="subpanel">
+            <ul class="endpoint-list">
+                <li><a href="/">Runtime home</a></li>
+                <li><a href="/.well-known/matrix/client">/.well-known/matrix/client</a></li>
+                <li><a href="/.well-known/matrix/server">/.well-known/matrix/server</a></li>
+                <li><a href="/_matrix/client/versions">/_matrix/client/versions</a></li>
+                <li><a href="/_continuwuity/support">/_continuwuity/support</a></li>
+            </ul>
+        </div>
+        {%- if let Some(email) = support_email %}
+        <div class="subpanel">
+            <p class="eyebrow">Support contact</p>
+            <p><a href="mailto:{{ email }}">{{ email }}</a></p>
+        </div>
+        {%- endif %}
+    </section>
+
+    <section class="panel">
+        <p class="eyebrow">Constraint</p>
+        <h2>Server identity should be treated as permanent.</h2>
+        <p>
+            Your Matrix server name is part of user identity and discovery. Plan it carefully and
+            avoid treating it like a routine setting that can be renamed after users and rooms exist.
+        </p>
+    </section>
+</div>
+{%- endblock content -%}

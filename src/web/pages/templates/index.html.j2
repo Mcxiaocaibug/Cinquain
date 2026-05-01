@@ -4,18 +4,84 @@
 <link rel="stylesheet" href="/_continuwuity/resources/index.css">
 {%- endblock -%}
 
+{%- block title -%}
+Cinquain
+{%- endblock -%}
+
 {%- block content -%}
-<div class="panel">
-    <h1>
-        Welcome to <a class="project-name" href="https://continuwuity.org">Continuwuity</a>!
-    </h1>
-    <p>Continuwuity is successfully installed and working.</p>
-    {%- if first_run %}
-    <p>To get started, <em>check the server logs</em> for instructions on how to create the first account.</p>
-    <p>For support, take a look at the <a href="https://continuwuity.org/introduction">documentation</a> or join the <a href="https://matrix.to/#/#continuwuity:continuwuity.org?via=continuwuity.org&via=ellis.link&via=explodie.org&via=matrix.org">Continuwuity Matrix room</a>.</p>
-    {%- else %}
-    <p>To get started, <a href="https://matrix.org/ecosystem/clients">choose a client</a> and connect to <code>{{ server_name }}</code>.</p>
-    {%- endif %}
+<div class="page-grid">
+    <section class="panel hero-panel">
+        <p class="eyebrow">Matrix runtime online</p>
+        <h1>Cinquain is running on <span class="project-name">{{ server_name }}</span>.</h1>
+        <p class="lede">
+            Cinquain turns the Continuwuity core into a more deployable Matrix product:
+            one deliberate runtime, fewer moving parts, and a cleaner operator surface.
+        </p>
+        <div class="actions">
+            <a class="button-link primary" href="/support">Open support page</a>
+            <a class="button-link secondary" href="https://matrix.org/ecosystem/clients">Choose a Matrix client</a>
+        </div>
+    </section>
+
+    <aside class="panel">
+        <p class="eyebrow">Deployment shape</p>
+        <ul class="stat-list">
+            <li>Matrix identity: <code>{{ server_name }}</code></li>
+            <li>Client and federation discovery available through Matrix well-known endpoints</li>
+            <li>Operator routes exposed under the built-in web runtime</li>
+            <li>Ready for reverse-proxy or packaged Docker deployment</li>
+        </ul>
+    </aside>
 </div>
 
+<div class="page-grid">
+    <section class="panel">
+        <p class="eyebrow">Next steps</p>
+        <h2>Bring the server to ready state.</h2>
+        <ol class="checklist">
+            {%- if first_run %}
+                {%- if bootstrap_required %}
+            <li>Open <a href="/bootstrap"><code>/bootstrap</code></a> and unlock the guided setup with the operator bootstrap secret.</li>
+            <li>Create the first administrator account you want to keep for ongoing operations.</li>
+                {%- else %}
+            <li>Check the startup logs for the one-time first account instructions.</li>
+            <li>Create the first account and complete the initial admin bootstrap.</li>
+                {%- endif %}
+            <li>Return here and verify the Matrix discovery endpoints below.</li>
+            {%- else %}
+            <li>Sign in using a Matrix client connected to <code>{{ server_name }}</code>.</li>
+            <li>Confirm that your operator support page and discovery endpoints respond correctly.</li>
+            <li>Verify client login, sync, and federation before inviting real users.</li>
+            {%- endif %}
+        </ol>
+        {%- if first_run && bootstrap_required %}
+        <div class="subpanel">
+            <p class="eyebrow">Guided bootstrap</p>
+            <p>
+                This server is waiting for its first administrator. Open
+                <a href="/bootstrap"><code>/bootstrap</code></a>, enter the bootstrap secret configured by
+                the operator, and finish the setup in one step.
+            </p>
+            <p>The bootstrap route closes automatically after the first administrator is created.</p>
+        </div>
+        {%- endif %}
+    </section>
+
+    <section class="panel">
+        <p class="eyebrow">Useful endpoints</p>
+        <h2>Runtime surfaces</h2>
+        <ul class="endpoint-list">
+            <li><a href="/.well-known/matrix/client">/.well-known/matrix/client</a></li>
+            <li><a href="/.well-known/matrix/server">/.well-known/matrix/server</a></li>
+            <li><a href="/_matrix/client/versions">/_matrix/client/versions</a></li>
+            <li><a href="/support">/support</a></li>
+        </ul>
+        {%- if let Some(email) = support_email %}
+        <div class="subpanel">
+            <p class="eyebrow">Operator contact</p>
+            <p>Configured support email: <a href="mailto:{{ email }}">{{ email }}</a></p>
+        </div>
+        {%- endif %}
+    </section>
+</div>
 {%- endblock content -%}

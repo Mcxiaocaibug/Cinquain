@@ -1,0 +1,45 @@
+services:
+    caddy:
+        image: docker.io/caddy:latest
+        restart: unless-stopped
+        ports:
+            - 80:80
+            - 443:443
+        volumes:
+            - ./Caddyfile:/etc/caddy/Caddyfile:ro
+            - ./site:/srv:ro
+            - caddy_data:/data
+            - caddy_config:/config
+        depends_on:
+            - homeserver
+
+    homeserver:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+            args:
+                CONTINUWUITY_VERSION_EXTRA: "+cinquain"
+        image: ${CINQUAIN_HOMESERVER_IMAGE}
+        restart: unless-stopped
+        environment:
+            CONTINUWUITY_SERVER_NAME: ${CINQUAIN_SERVER_NAME}
+            CONTINUWUITY_DATABASE_PATH: /var/lib/continuwuity
+            CONTINUWUITY_ADDRESS: 0.0.0.0
+            CONTINUWUITY_PORT: 8008
+            CONTINUWUITY_ALLOW_REGISTRATION: "false"
+            CONTINUWUITY_BOOTSTRAP_SECRET: ${CINQUAIN_BOOTSTRAP_SECRET}
+            CONTINUWUITY_WELL_KNOWN__CLIENT: https://${CINQUAIN_SERVER_NAME}
+            CONTINUWUITY_WELL_KNOWN__SERVER: ${CINQUAIN_SERVER_NAME}:443
+            CONTINUWUITY_WELL_KNOWN__SUPPORT_PAGE: https://${CINQUAIN_SERVER_NAME}/support
+            CONTINUWUITY_WELL_KNOWN__SUPPORT_EMAIL: ${CINQUAIN_SUPPORT_EMAIL}
+        volumes:
+            - db:/var/lib/continuwuity
+            - ./continuwuity-resolv.conf:/etc/resolv.conf:ro
+
+volumes:
+    db:
+        name: ${CINQUAIN_STACK_NAME}_db
+    caddy_data:
+        name: ${CINQUAIN_STACK_NAME}_caddy_data
+    caddy_config:
+        name: ${CINQUAIN_STACK_NAME}_caddy_config

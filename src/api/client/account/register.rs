@@ -61,11 +61,12 @@ pub(crate) async fn register_route(
 ) -> Result<register::v3::Response> {
 	let is_guest = body.kind == RegistrationKind::Guest;
 	let emergency_mode_enabled = services.config.emergency_password.is_some();
+	let bootstrap_pending = services.firstrun.bootstrap_required();
 
 	// Allow registration if it's enabled in the config file or if this is the first
 	// run (so the first user account can be created)
-	let allow_registration =
-		services.config.allow_registration || services.firstrun.is_first_run();
+	let allow_registration = !bootstrap_pending
+		&& (services.config.allow_registration || services.firstrun.is_first_run());
 
 	if !allow_registration && body.appservice_info.is_none() {
 		match (body.username.as_ref(), body.initial_device_display_name.as_ref()) {
@@ -97,6 +98,13 @@ pub(crate) async fn register_route(
 					"Rejecting registration attempt as registration is disabled"
 				);
 			},
+		}
+
+		if bootstrap_pending {
+			return Err!(Request(Forbidden(
+				"This server is waiting for its initial administrator to be created through the \
+				 bootstrap page."
+			)));
 		}
 
 		return Err!(Request(Forbidden(
@@ -406,7 +414,7 @@ async fn create_registration_uiaa_session(
 ) -> Result<(Vec<AuthFlow>, Box<RawValue>)> {
 	let mut params = HashMap::<String, serde_json::Value>::new();
 
-	let flows = if services.firstrun.is_first_run() {
+	let flows = if services.firstrun.is_first_run() && !services.firstrun.bootstrap_required() {
 		// Registration token forced while in first-run mode
 		vec![AuthFlow::new(vec![AuthType::RegistrationToken])]
 	} else {

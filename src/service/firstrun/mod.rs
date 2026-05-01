@@ -1,16 +1,25 @@
 use std::{
+	fmt::Write as _,
 	io::IsTerminal,
 	sync::{Arc, OnceLock},
 };
 
 use askama::Template;
 use async_trait::async_trait;
-use conduwuit::{Result, info, utils::ReadyExt};
+use conduwuit::{Err, Result, err, info, utils::ReadyExt};
 use futures::{FutureExt, StreamExt};
-use ruma::{UserId, events::room::message::RoomMessageEventContent};
+use ruma::{
+	OwnedUserId, UserId,
+	events::{
+		GlobalAccountDataEventType, push_rules::PushRulesEvent,
+		room::message::RoomMessageEventContent,
+	},
+	push,
+};
+use tokio::sync::Mutex;
 
 use crate::{
-	Dep, admin, config, globals,
+	Dep, account_data, admin, appservice, config, globals,
 	registration_tokens::{self, ValidToken, ValidTokenSource},
 	users,
 };
@@ -39,13 +48,18 @@ pub struct Service {
 	/// A single-use registration token which may be used to create the first
 	/// account.
 	first_account_token: String,
+	/// Serializes the guided bootstrap flow so only one first administrator can
+	/// be created.
+	bootstrap_lock: Mutex<()>,
 }
 
 struct Services {
+	account_data: Dep<account_data::Service>,
 	config: Dep<config::Service>,
 	users: Dep<users::Service>,
 	globals: Dep<globals::Service>,
 	admin: Dep<admin::Service>,
+	appservice: Dep<appservice::Service>,
 }
 
 #[async_trait]
@@ -53,14 +67,17 @@ impl crate::Service for Service {
 	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			services: Services {
+				account_data: args.depend::<account_data::Service>("account_data"),
 				config: args.depend::<config::Service>("config"),
 				users: args.depend::<users::Service>("users"),
 				globals: args.depend::<globals::Service>("globals"),
 				admin: args.depend::<admin::Service>("admin"),
+				appservice: args.depend::<appservice::Service>("appservice"),
 			},
 			// marker starts in an indeterminate state
 			first_run_marker: OnceLock::new(),
 			first_account_token: registration_tokens::Service::generate_token_string(),
+			bootstrap_lock: Mutex::new(()),
 		}))
 	}
 
@@ -94,6 +111,15 @@ impl crate::Service for Service {
 }
 
 impl Service {
+	fn bootstrap_secret(&self) -> Option<&str> {
+		self.services
+			.config
+			.bootstrap_secret
+			.as_deref()
+			.map(str::trim)
+			.filter(|secret| !secret.is_empty())
+	}
+
 	/// Check if first run mode is active.
 	pub fn is_first_run(&self) -> bool {
 		self.first_run_marker
@@ -101,6 +127,17 @@ impl Service {
 			.expect("First run mode should not be checked during server startup")
 			.get()
 			.is_none()
+	}
+
+	/// Check if the built-in bootstrap flow is required for first-run setup.
+	pub fn bootstrap_required(&self) -> bool {
+		self.is_first_run() && self.bootstrap_secret().is_some()
+	}
+
+	/// Validate the operator bootstrap secret.
+	pub fn check_bootstrap_secret(&self, secret: &str) -> bool {
+		self.bootstrap_secret()
+			.is_some_and(|configured| configured == secret.trim())
 	}
 
 	/// Disable first run mode and begin normal operation.
@@ -153,10 +190,96 @@ impl Service {
 		Ok(true)
 	}
 
+	/// Create the first administrator through the guided bootstrap flow.
+	pub async fn bootstrap_first_admin(
+		&self,
+		username: &str,
+		password: &str,
+	) -> Result<OwnedUserId> {
+		let _bootstrap_guard = self.bootstrap_lock.lock().await;
+
+		if !self.is_first_run() {
+			return Err!("Initial bootstrap has already been completed.");
+		}
+
+		if self.bootstrap_secret().is_none() {
+			return Err!(
+				"Guided bootstrap is not enabled on this server. Configure \
+				 `bootstrap_secret` and restart to use it."
+			);
+		}
+
+		let username = username.trim();
+		if username.is_empty() {
+			return Err!("Username cannot be empty.");
+		}
+
+		let user_id = UserId::parse_with_server_name(
+			username.to_lowercase(),
+			self.services.globals.server_name(),
+		)
+		.map_err(|e| err!("The supplied username is not a valid local username: {e}"))?;
+
+		if let Err(e) = user_id.validate_strict()
+			&& self.services.config.emergency_password.is_none()
+		{
+			return Err!("Username {user_id} contains disallowed characters or spaces: {e}");
+		}
+
+		if self.services.appservice.is_exclusive_user_id(&user_id).await
+			&& self.services.config.emergency_password.is_none()
+		{
+			return Err!("Username {user_id} is reserved by an appservice.");
+		}
+
+		if self.services.users.exists(&user_id).await {
+			return Err!("User {user_id} already exists.");
+		}
+
+		self.services
+			.users
+			.create(&user_id, Some(password), None)
+			.await?;
+
+		let mut displayname = user_id.localpart().to_owned();
+		if !self.services.globals.new_user_displayname_suffix().is_empty() {
+			write!(
+				displayname,
+				" {}",
+				self.services.globals.new_user_displayname_suffix()
+			)?;
+		}
+
+		self.services
+			.users
+			.set_displayname(&user_id, Some(displayname));
+
+		self.services
+			.account_data
+			.update(
+				None,
+				&user_id,
+				GlobalAccountDataEventType::PushRules.to_string().into(),
+				&serde_json::to_value(PushRulesEvent::new(
+					push::Ruleset::server_default(&user_id).into(),
+				))
+				.expect("should be able to serialize push rules"),
+			)
+			.await?;
+
+		if !self.empower_first_user(&user_id).await? {
+			return Err!(
+				"Initial bootstrap finished on another session before this request completed."
+			);
+		}
+
+		Ok(user_id)
+	}
+
 	/// Get the single-use registration token which may be used to create the
 	/// first account.
 	pub fn get_first_account_token(&self) -> Option<ValidToken> {
-		if self.is_first_run() {
+		if self.is_first_run() && !self.bootstrap_required() {
 			Some(ValidToken {
 				token: self.first_account_token.clone(),
 				source: ValidTokenSource::FirstAccount,
@@ -187,6 +310,27 @@ impl Service {
 		eprintln!(
 			"In order to use your new homeserver, you need to create its first user account."
 		);
+
+		if self.bootstrap_required() {
+			let bootstrap_url = self
+				.services
+				.config
+				.get_client_domain()
+				.join("/_continuwuity/bootstrap")
+				.expect("bootstrap path should be valid");
+
+			eprintln!(
+				"Open {} and use the configured bootstrap secret to create the first \
+				 administrator account.",
+				bootstrap_url.as_str().bold().green()
+			);
+			eprintln!(
+				"The guided bootstrap page closes automatically after the first administrator \
+				 is created."
+			);
+			return;
+		}
+
 		eprintln!(
 			"Open your Matrix client of choice and register an account on {} using the \
 			 registration token {} . Pick your own username and password!",

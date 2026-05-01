@@ -12,8 +12,8 @@
     font-weight: 700;
     line-height: calc(var(--avatar-size) - 2px);
 
-    color: oklch(from var(--c1) calc(l + 0.2) c h);
-    background-color: var(--c1);
+    color: #fff;
+    background: linear-gradient(135deg, var(--c1), color-mix(in oklab, var(--c1) 58%, var(--c3)));
 }
 
 .user-card {
@@ -22,8 +22,9 @@
     align-items: center;
     gap: 16px;
 
-    background-color: oklch(from var(--panel-bg) calc(l - 0.05) c h);
-    border-radius: var(--border-radius-lg);
+    background: color-mix(in oklab, var(--panel-bg) 88%, transparent);
+    border: 1px solid var(--panel-border);
+    border-radius: calc(var(--border-radius-lg) - 8px);
     padding: 16px;
 
     .info {

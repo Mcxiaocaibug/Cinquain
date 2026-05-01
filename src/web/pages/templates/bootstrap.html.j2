@@ -1,0 +1,58 @@
+{% extends "_layout.html.j2" %}
+
+{%- block head -%}
+<link rel="stylesheet" href="/_continuwuity/resources/index.css">
+{%- endblock -%}
+
+{%- block title -%}
+Cinquain Bootstrap
+{%- endblock -%}
+
+{%- block content -%}
+<div class="panel narrow">
+    <p class="eyebrow">Bootstrap</p>
+    <h1>Finish bringing <span class="project-name">{{ server_name }}</span> online.</h1>
+    <p class="lede">
+        Create the first administrator inside the runtime itself. This flow is only available while
+        the server is in first-run mode.
+    </p>
+
+    {%- if let Some(message) = message %}
+    <div class="notice notice--{{ message_tone }}">
+        <p>{{ message }}</p>
+    </div>
+    {%- endif %}
+
+    {% if let Some(form) = form %}
+    <div class="subpanel">
+        <p class="eyebrow">What you need</p>
+        <ul class="checklist">
+            <li>The operator bootstrap secret configured for this server.</li>
+            <li>The administrator username you want to keep long term.</li>
+            <li>A strong password for the first administrator account.</li>
+        </ul>
+    </div>
+    {{ form }}
+    <p><small>This route closes automatically after the first administrator is created.</small></p>
+    {% else %}
+        {%- if let Some(user_id) = success_user_id %}
+    <div class="subpanel">
+        <p class="eyebrow">Administrator created</p>
+        <p>Your first administrator account is <code>{{ user_id }}</code>.</p>
+        <p>Sign in from your Matrix client, then continue with the runtime support checks.</p>
+    </div>
+        {%- endif %}
+    <div class="actions">
+        <a class="button-link primary" href="/support">Open support page</a>
+        <a class="button-link secondary" href="/_matrix/client/versions">Check API versions</a>
+    </div>
+    {% endif %}
+
+    {%- if let Some(email) = support_email %}
+    <div class="subpanel">
+        <p class="eyebrow">Operator contact</p>
+        <p>Configured support email: <a href="mailto:{{ email }}">{{ email }}</a></p>
+    </div>
+    {%- endif %}
+</div>
+{%- endblock content -%}

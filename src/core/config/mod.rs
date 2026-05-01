@@ -2122,6 +2122,17 @@ pub struct Config {
 	#[serde(default)]
 	pub force_disable_first_run_mode: bool,
 
+	/// A one-time operator secret for the built-in bootstrap page.
+	///
+	/// When this is set, first-run administrator creation must be completed
+	/// through the bootstrap page instead of the Matrix client registration
+	/// flow. The page becomes unavailable after the first administrator is
+	/// created.
+	///
+	/// display: hidden
+	#[serde(default)]
+	pub bootstrap_secret: Option<String>,
+
 	/// Allow search engines and crawlers to index Continuwuity's built-in
 	/// webpages served under the `/_continuwuity/` prefix.
 	///

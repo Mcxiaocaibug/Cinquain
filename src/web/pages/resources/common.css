@@ -1,51 +1,51 @@
 :root {
     color-scheme: light;
-    --font-stack: sans-serif;
+    --font-stack: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+    --display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
 
-    --background-color: #fff;
-    --text-color: #000;
-    --secondary: #666;
-    --bg: oklch(0.76 0.0854 317.27);
-    --panel-bg: oklch(0.91 0.042 317.27);
-    --c1: oklch(0.44 0.177 353.06);
-    --c2: oklch(0.59 0.158 150.88);
+    --text-color: #172127;
+    --secondary: rgba(23, 33, 39, 0.7);
+    --bg: #f7f2e8;
+    --panel-bg: rgba(255, 255, 255, 0.72);
+    --panel-border: rgba(23, 33, 39, 0.1);
+    --panel-highlight: rgba(240, 214, 164, 0.35);
+    --c1: #1f5b49;
+    --c2: #9d6f2b;
+    --c3: #173947;
 
-    --name-lightness: 0.45;
-    --background-lightness: 0.9;
+    --name-lightness: 0.7;
+    --background-lightness: 0.95;
 
     --background-gradient:
-        radial-gradient(42.12% 56.13% at 100% 0%, oklch(from var(--c2) var(--background-lightness) c h) 0%, #fff0 100%),
-        radial-gradient(42.01% 79.63% at 52.86% 0%, #d9ff5333 0%, #fff0 100%),
-        radial-gradient(79.67% 58.09% at 0% 0%, oklch(from var(--c1) var(--background-lightness) c h) 0%, #fff0 100%);
+        radial-gradient(32rem 32rem at 100% 0%, rgba(157, 111, 43, 0.18), #fff0 60%),
+        radial-gradient(26rem 26rem at 0% 0%, rgba(31, 91, 73, 0.12), #fff0 56%),
+        linear-gradient(180deg, #f7f2e8 0%, #edf4ef 100%);
 
     --normal-font-size: 1rem;
-    --small-font-size: 0.8rem;
+    --small-font-size: 0.82rem;
 
-    --border-radius-sm: 5px;
-    --border-radius-lg: 15px;
+    --border-radius-sm: 10px;
+    --border-radius-lg: 26px;
+    --shadow: 0 28px 60px rgba(29, 36, 41, 0.12);
 
     @media (prefers-color-scheme: dark) {
         color-scheme: dark;
-        --text-color: #fff;
-        --secondary: #888;
-        --bg: oklch(0.15 0.042 317.27);
-        --panel-bg: oklch(0.24 0.03 317.27);
+        --text-color: #f6f6f4;
+        --secondary: rgba(246, 246, 244, 0.7);
+        --bg: #0f1418;
+        --panel-bg: rgba(19, 25, 29, 0.84);
+        --panel-border: rgba(255, 255, 255, 0.09);
+        --panel-highlight: rgba(157, 111, 43, 0.18);
 
         --name-lightness: 0.8;
-        --background-lightness: 0.2;
+        --background-lightness: 0.24;
 
         --background-gradient:
-            radial-gradient(
-                42.12% 56.13% at 100% 0%,
-                oklch(from var(--c2) var(--background-lightness) c h) 0%,
-                #12121200 100%
-            ),
-            radial-gradient(55.81% 87.78% at 48.37% 0%, #000 0%, #12121200 89.55%),
-            radial-gradient(
-                122.65% 88.24% at 0% 0%,
-                oklch(from var(--c1) var(--background-lightness) c h) 0%,
-                #12121200 100%
-            );
+            radial-gradient(32rem 32rem at 100% 0%, rgba(157, 111, 43, 0.16), #12121200 60%),
+            radial-gradient(26rem 26rem at 0% 0%, rgba(31, 91, 73, 0.16), #12121200 56%),
+            linear-gradient(180deg, #0f1418 0%, #152025 100%);
+
+        --shadow: none;
     }
 }
 
@@ -54,10 +54,8 @@
 }
 
 body {
-    display: grid;
     margin: 0;
     padding: 0;
-    place-items: center;
     min-height: 100vh;
 
     color: var(--text-color);
@@ -71,22 +69,36 @@ html {
     font-size: var(--normal-font-size);
 }
 
+main {
+    width: min(1120px, calc(100dvw - 2rem));
+    margin: 0 auto;
+    padding: 1.25rem 0 3rem;
+}
+
 footer {
-    padding-inline: 0.25rem;
-    height: max(fit-content, 2rem);
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    margin-top: 1.25rem;
+    padding: 0 0.25rem 0.75rem;
 
     .logo {
-        width: 100%;
-        height: 64px;
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+    }
+
+    p {
+        margin: 0;
+        color: var(--secondary);
     }
 }
 
-p {
-    margin: 1rem 0;
-}
-
 em {
-    color: oklch(from var(--c2) var(--name-lightness) c h);
+    color: var(--c2);
     font-weight: bold;
     font-style: normal;
 }
@@ -97,26 +109,52 @@ small {
 
 small.error {
     display: block;
-    color: red;
+    color: #b53b2d;
     font-size: small;
     font-style: italic;
     margin-bottom: 0.5rem;
 }
 
-.panel {
-    --preferred-width: 12rem + 40dvw;
-    --maximum-width: 48rem;
+.notice {
+    margin: 1rem 0 1.2rem;
+    border-radius: calc(var(--border-radius-lg) - 8px);
+    border: 1px solid var(--panel-border);
+    padding: 0.95rem 1rem;
+    background: color-mix(in oklab, var(--panel-bg) 88%, transparent);
+}
 
-    width: min(clamp(24rem, var(--preferred-width), var(--maximum-width)), calc(100dvw - 3rem));
+.notice p {
+    margin: 0;
+}
+
+.notice--info {
+    border-color: color-mix(in oklab, var(--panel-border) 70%, var(--c2));
+}
+
+.notice--success {
+    border-color: color-mix(in oklab, var(--panel-border) 55%, var(--c1));
+    background: color-mix(in oklab, var(--panel-bg) 82%, var(--c1) 12%);
+}
+
+.notice--error {
+    border-color: color-mix(in oklab, var(--panel-border) 40%, #b53b2d);
+    background: color-mix(in oklab, var(--panel-bg) 84%, #b53b2d 12%);
+}
+
+.panel {
+    width: 100%;
     border-radius: var(--border-radius-lg);
-    background-color: var(--panel-bg);
-    padding-inline: 1.5rem;
-    padding-block: 1rem;
-    box-shadow: 0 0.25em 0.375em hsla(0, 0%, 0%, 0.1);
+    border: 1px solid var(--panel-border);
+    background:
+        linear-gradient(180deg, var(--panel-bg), color-mix(in oklab, var(--panel-bg) 80%, transparent)),
+        radial-gradient(circle at top right, var(--panel-highlight), transparent 38%);
+    padding-inline: 1.4rem;
+    padding-block: 1.2rem;
+    box-shadow: var(--shadow);
 
     &.narrow {
-        --preferred-width: 12rem + 20dvw;
-        --maximum-width: 36rem;
+        max-width: 38rem;
+        margin-inline: auto;
 
         input, button {
             width: 100%;
@@ -126,16 +164,19 @@ small.error {
 
 label {
     display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.92rem;
+    font-weight: 700;
 }
 
 input, button {
     display: inline-block;
-    padding: 0.5em;
+    padding: 0.82em 0.9em;
     margin-bottom: 0.5em;
 
     font-size: inherit;
     font-family: inherit;
-    color: white;
+    color: var(--text-color);
     background-color: transparent;
 
     border: none;
@@ -143,43 +184,79 @@ input, button {
 }
 
 input {
-    border: 2px solid var(--secondary);
+    border: 1px solid color-mix(in oklab, var(--panel-border) 80%, var(--c3));
+    background: color-mix(in oklab, var(--panel-bg) 92%, transparent);
 
     &:focus-visible {
-        outline: 2px solid var(--c1);
+        outline: 2px solid color-mix(in oklab, var(--c1) 65%, white);
         border-color: transparent;
     }
 }
 
 button {
-    background-color: var(--c1);
-    transition: opacity .2s;
+    color: #fff;
+    background: linear-gradient(135deg, var(--c1), color-mix(in oklab, var(--c1) 64%, var(--c3)));
+    transition:
+        opacity .2s,
+        transform .2s;
 
     &:enabled:hover {
-        opacity: 0.8;
+        opacity: 0.94;
+        transform: translateY(-1px);
         cursor: pointer;
     }
 }
 
 h1 {
     margin-top: 0;
-    margin-bottom: 0.67em;
+    margin-bottom: 0.55em;
+    font-family: var(--display-font);
+    font-size: clamp(2.2rem, 5vw, 4.4rem);
+    line-height: 0.96;
 }
 
-@media (max-width: 425px) {
-    main {
-        padding-block-start: 2rem;
-        width: 100%;
-    }
+p {
+    margin: 1rem 0;
+}
 
-    .panel {
-        border-radius: 0;
-        width: 100%;
+a {
+    color: var(--c1);
+    text-underline-offset: 0.16em;
+}
+
+code {
+    padding: 0.12rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(23, 33, 39, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+    code {
+        background: rgba(255, 255, 255, 0.1);
     }
 }
 
 @media (max-width: 799px) {
+    main {
+        width: min(100dvw - 1rem, 100%);
+        padding-top: 0.5rem;
+    }
+
+    .panel {
+        border-radius: 20px;
+        padding-inline: 1.05rem;
+        padding-block: 1rem;
+    }
+
     input, button {
         width: 100%;
+    }
+
+    h1 {
+        font-size: 2.4rem;
+    }
+
+    footer {
+        padding-bottom: 0.25rem;
     }
 }

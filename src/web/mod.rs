@@ -17,8 +17,8 @@ mod pages;
 
 type State = state::State;
 
-const CATASTROPHIC_FAILURE: &str = "cat-astrophic failure! we couldn't even render the error template. \
-please contact the team @ https://continuwuity.org";
+const CATASTROPHIC_FAILURE: &str = "catastrophic web rendering failure. please contact the server \
+operator and inspect the homeserver logs.";
 
 #[derive(Debug, thiserror::Error)]
 enum WebError {
@@ -84,6 +84,7 @@ pub fn build() -> Router<state::State> {
 
 	Router::new()
 		.merge(index::build())
+		.merge(bootstrap::build())
 		.nest(
 			"/_continuwuity/",
 			Router::new()
