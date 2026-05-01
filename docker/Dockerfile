@@ -44,24 +44,30 @@ ARG LLVM_VERSION=21
 
 # Install repo tools
 # Line one: compiler tools
-# Line two: curl, for downloading binaries and wget because llvm.sh is broken with curl
+# Line two: curl, for downloading binaries and Git dependencies
 # Line three: for xx-verify
 # golang, cmake: For aws-lc-rs bindgen
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y \
     pkg-config make jq \
-    wget curl git software-properties-common \
+    ca-certificates curl git gnupg \
     file
     # golang cmake
 
 # LLVM packages
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    curl https://apt.llvm.org/llvm.sh > llvm.sh && \
-    chmod +x llvm.sh && \
-    ./llvm.sh ${LLVM_VERSION} -m${LLVM_APT_MIRROR} && \
-    rm llvm.sh
+    --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOF
+    set -eux
+    . /etc/os-release
+    install -d -m 0755 /etc/apt/keyrings
+    curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+        | gpg --dearmor -o /etc/apt/keyrings/apt.llvm.org.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.gpg] ${LLVM_APT_MIRROR}/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${LLVM_VERSION} main" \
+        > /etc/apt/sources.list.d/llvm.list
+    apt-get update
+    apt-get install -y clang-${LLVM_VERSION} lldb-${LLVM_VERSION} lld-${LLVM_VERSION} clangd-${LLVM_VERSION}
+EOF
 
 # Create symlinks for LLVM tools
 RUN <<EOF
