@@ -60,7 +60,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     curl https://apt.llvm.org/llvm.sh > llvm.sh && \
     chmod +x llvm.sh && \
-    ./llvm.sh ${LLVM_VERSION} -m=${LLVM_APT_MIRROR} && \
+    ./llvm.sh ${LLVM_VERSION} -m${LLVM_APT_MIRROR} && \
     rm llvm.sh
 
 # Create symlinks for LLVM tools
