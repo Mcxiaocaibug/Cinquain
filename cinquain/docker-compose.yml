@@ -22,6 +22,9 @@ services:
             dockerfile: docker/Dockerfile
             args:
                 CONTINUWUITY_VERSION_EXTRA: "+cinquain"
+                DEBIAN_APT_MIRROR: ${CINQUAIN_DEBIAN_APT_MIRROR:-http://deb.debian.org/debian}
+                DEBIAN_SECURITY_APT_MIRROR: ${CINQUAIN_DEBIAN_SECURITY_APT_MIRROR:-http://deb.debian.org/debian-security}
+                LLVM_APT_MIRROR: ${CINQUAIN_LLVM_APT_MIRROR:-https://apt.llvm.org}
         image: ${CINQUAIN_HOMESERVER_IMAGE}
         restart: unless-stopped
         environment:

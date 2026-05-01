@@ -7,8 +7,35 @@ FROM --platform=$BUILDPLATFORM docker.io/tonistiigi/xx AS xx
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS base
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS toolchain
 
+ARG DEBIAN_APT_MIRROR=http://deb.debian.org/debian
+ARG DEBIAN_SECURITY_APT_MIRROR=http://deb.debian.org/debian-security
+ARG LLVM_APT_MIRROR=https://apt.llvm.org
+
 # Prevent deletion of apt cache
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
+
+RUN <<EOF
+    set -eux
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+        sed -i \
+            -e "s|http://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
+            -e "s|https://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
+            -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            /etc/apt/sources.list.d/debian.sources
+    elif [ -f /etc/apt/sources.list ]; then
+        sed -i \
+            -e "s|http://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
+            -e "s|https://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
+            -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
+            /etc/apt/sources.list
+    fi
+EOF
 
 # Match Rustc version as close as possible
 # rustc -vV
@@ -33,7 +60,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     curl https://apt.llvm.org/llvm.sh > llvm.sh && \
     chmod +x llvm.sh && \
-    ./llvm.sh ${LLVM_VERSION} && \
+    ./llvm.sh ${LLVM_VERSION} -m=${LLVM_APT_MIRROR} && \
     rm llvm.sh
 
 # Create symlinks for LLVM tools
