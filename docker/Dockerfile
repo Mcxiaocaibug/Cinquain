@@ -13,6 +13,7 @@ ARG LLVM_APT_MIRROR=https://apt.llvm.org
 ARG RUSTUP_DIST_SERVER=https://static.rust-lang.org
 ARG RUSTUP_UPDATE_ROOT=https://static.rust-lang.org/rustup
 ARG RUSTUP_TOOLCHAIN=1.92.0
+ARG CARGO_REGISTRY_MIRROR=
 ENV RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER}
 ENV RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT}
 ENV RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN}
@@ -159,6 +160,14 @@ EOF
 
 # Prepare output directories
 RUN mkdir /out
+
+RUN <<EOF
+    set -eux
+    if [ -n "${CARGO_REGISTRY_MIRROR}" ]; then
+        mkdir -p /usr/local/cargo
+        printf '[source.crates-io]\nreplace-with = "mirror"\n\n[source.mirror]\nregistry = "%s"\n' "${CARGO_REGISTRY_MIRROR}" > /usr/local/cargo/config.toml
+    fi
+EOF
 
 FROM toolchain AS builder
 

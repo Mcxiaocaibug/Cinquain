@@ -27,6 +27,7 @@ services:
                 LLVM_APT_MIRROR: ${CINQUAIN_LLVM_APT_MIRROR:-https://apt.llvm.org}
                 RUSTUP_DIST_SERVER: ${CINQUAIN_RUSTUP_DIST_SERVER:-https://static.rust-lang.org}
                 RUSTUP_UPDATE_ROOT: ${CINQUAIN_RUSTUP_UPDATE_ROOT:-https://static.rust-lang.org/rustup}
+                CARGO_REGISTRY_MIRROR: ${CINQUAIN_CARGO_REGISTRY_MIRROR:-}
         image: ${CINQUAIN_HOMESERVER_IMAGE}
         restart: unless-stopped
         environment:
