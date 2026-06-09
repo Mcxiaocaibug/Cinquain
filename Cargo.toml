@@ -671,6 +671,10 @@ path = "src/ruminuwuity"
 strip = "symbols"
 lto = "thin"
 
+[profile.release-fast]
+inherits = "release"
+lto = false
+
 # release profile with debug symbols
 [profile.release-debuginfo]
 inherits = "release"
