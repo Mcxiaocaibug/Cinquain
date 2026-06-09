@@ -207,11 +207,13 @@ ARG RUST_PROFILE=release
 ARG CARGO_FEATURES="default"
 
 # Build the binary
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git/db \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-registry-${TARGETPLATFORM},sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git/db,id=continuwuity-cargo-git-${TARGETPLATFORM},sharing=locked \
     --mount=type=cache,target=/app/target,id=continuwuity-cargo-target-${TARGET_CPU}-${TARGETPLATFORM}-${RUST_PROFILE} \
     bash <<'EOF'
+    set -o errexit
     set -o allexport
+    set -o pipefail
     set -o xtrace
     . /etc/environment
 
@@ -244,9 +246,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 EOF
 
 # Generate Software Bill of Materials (SBOM)
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git/db \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-registry-${TARGETPLATFORM},sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git/db,id=continuwuity-cargo-git-${TARGETPLATFORM},sharing=locked \
     bash <<'EOF'
+    set -o errexit
+    set -o pipefail
     set -o xtrace
     mkdir /out/sbom
     if ! cargo sbom --help >/dev/null 2>&1; then
