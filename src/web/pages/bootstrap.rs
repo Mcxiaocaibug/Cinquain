@@ -68,12 +68,12 @@ pub(crate) fn build() -> Router<crate::State> {
 }
 
 async fn get_bootstrap(State(services): State<crate::State>) -> Result<Response, WebError> {
-	if let Some(message) = bootstrap_unavailable_message(&services) {
-		return Ok(bootstrap_page(&services, None, Some(message), "info", None));
+	if let Some(message) = bootstrap_unavailable_message(services) {
+		return Ok(bootstrap_page(services, None, Some(message), "info", None));
 	}
 
 	Ok(bootstrap_page(
-		&services,
+		services,
 		Some(BootstrapForm::build(None)),
 		None,
 		"info",
@@ -87,10 +87,10 @@ async fn post_bootstrap(
 ) -> Result<Response, WebError> {
 	let axum::Form(form) = form?;
 
-	if let Some(message) = bootstrap_unavailable_message(&services) {
+	if let Some(message) = bootstrap_unavailable_message(services) {
 		return Ok((
 			StatusCode::CONFLICT,
-			bootstrap_page(&services, None, Some(message), "info", None),
+			bootstrap_page(services, None, Some(message), "info", None),
 		)
 			.into_response());
 	}
@@ -117,7 +117,7 @@ async fn post_bootstrap(
 		return Ok((
 			StatusCode::BAD_REQUEST,
 			bootstrap_page(
-				&services,
+				services,
 				Some(BootstrapForm::build(Some(errors))),
 				Some(
 					"Fix the highlighted fields, then submit the bootstrap form again."
@@ -136,7 +136,7 @@ async fn post_bootstrap(
 		.await
 	{
 		| Ok(user_id) => Ok(bootstrap_page(
-			&services,
+			services,
 			None,
 			Some("Initial administrator created successfully.".to_owned()),
 			"success",
@@ -145,7 +145,7 @@ async fn post_bootstrap(
 		| Err(error) => Ok((
 			StatusCode::BAD_REQUEST,
 			bootstrap_page(
-				&services,
+				services,
 				Some(BootstrapForm::build(None)),
 				Some(error.to_string()),
 				"error",
@@ -157,14 +157,14 @@ async fn post_bootstrap(
 }
 
 fn bootstrap_page(
-	services: &crate::State,
+	services: crate::State,
 	form: Option<Form<'static>>,
 	message: Option<String>,
 	message_tone: &'static str,
 	success_user_id: Option<String>,
 ) -> Response {
 	Bootstrap::new(
-		services,
+		&services,
 		services.globals.server_name().as_str(),
 		services.config.well_known.support_email.clone(),
 		form,
@@ -175,7 +175,7 @@ fn bootstrap_page(
 	.into_response()
 }
 
-fn bootstrap_unavailable_message(services: &crate::State) -> Option<String> {
+fn bootstrap_unavailable_message(services: crate::State) -> Option<String> {
 	if !services.firstrun.is_first_run() {
 		Some(
 			"Initial bootstrap is already complete. Sign in with your administrator account \

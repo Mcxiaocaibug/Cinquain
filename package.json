@@ -11,7 +11,8 @@
     "docs:dev": "rspress dev docs",
     "docs:build": "rspress build docs",
     "docs:preview": "rspress preview docs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "cinquain:preflight": "sh cinquain/preflight.sh",
+    "test": "node cinquain/tests/deploy-console.mjs && sh cinquain/tests/install-smoke.sh"
   },
   "repository": {
     "type": "git",

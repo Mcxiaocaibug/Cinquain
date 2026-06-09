@@ -33,7 +33,9 @@ for path in \
     site/deploy/index.html \
     site/support/index.html \
     site/assets/app.css \
-    site/assets/app.js
+    site/assets/app.js \
+    tests/deploy-console.mjs \
+    tests/install-smoke.sh
 do
     check_file "$path"
 done
@@ -44,10 +46,27 @@ for path in \
     backup.sh \
     doctor.sh \
     release-image.sh \
-    preflight.sh
+    preflight.sh \
+    tests/install-smoke.sh
 do
     check_shell "$path"
 done
+
+if command -v node >/dev/null 2>&1; then
+    if node tests/deploy-console.mjs; then
+        :
+    else
+        failures=$((failures + 1))
+    fi
+else
+    echo "deploy-console: skipped because Node.js is unavailable"
+fi
+
+if sh tests/install-smoke.sh; then
+    :
+else
+    failures=$((failures + 1))
+fi
 
 if ! grep -q "data-deploy-form" site/deploy/index.html; then
     echo "Deploy console is missing the guided form."

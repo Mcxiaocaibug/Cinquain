@@ -100,7 +100,35 @@ ensure_bootstrap_secret() {
 
 normalise_domain() {
     printf "%s" "$1" \
-        | sed -e 's#^https\?://##' -e 's#/.*$##' -e 's/[[:space:]]//g'
+        | tr '[:upper:]' '[:lower:]' \
+        | sed -e 's#^https://##' -e 's#^http://##' -e 's#/.*$##' -e 's/:[0-9][0-9]*$//' -e 's/\.$//' -e 's/[[:space:]]//g'
+}
+
+is_valid_domain() {
+    printf "%s" "$1" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$'
+}
+
+is_valid_email() {
+    printf "%s" "$1" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+}
+
+is_valid_port() {
+    value=$1
+    case "$value" in
+        "" | *[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    [ "$value" -ge 1 ] 2>/dev/null && [ "$value" -le 65535 ] 2>/dev/null
+}
+
+is_valid_stack_name() {
+    printf "%s" "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]*$'
+}
+
+is_valid_image_ref() {
+    printf "%s" "$1" | grep -Eq '^[^[:space:]]+$'
 }
 
 is_example_value() {
@@ -249,6 +277,41 @@ fi
 
 if is_example_value "$CINQUAIN_ACME_EMAIL"; then
     echo "CINQUAIN_ACME_EMAIL still uses the example value."
+    exit 1
+fi
+
+if ! is_valid_stack_name "$CINQUAIN_STACK_NAME"; then
+    echo "CINQUAIN_STACK_NAME contains unsupported characters."
+    exit 1
+fi
+
+if ! is_valid_domain "$CINQUAIN_SERVER_NAME"; then
+    echo "CINQUAIN_SERVER_NAME is not a valid DNS name."
+    exit 1
+fi
+
+if ! is_valid_email "$CINQUAIN_ACME_EMAIL"; then
+    echo "CINQUAIN_ACME_EMAIL is not a valid email address."
+    exit 1
+fi
+
+if ! is_valid_email "$CINQUAIN_SUPPORT_EMAIL"; then
+    echo "CINQUAIN_SUPPORT_EMAIL is not a valid email address."
+    exit 1
+fi
+
+if ! is_valid_image_ref "$CINQUAIN_HOMESERVER_IMAGE"; then
+    echo "CINQUAIN_HOMESERVER_IMAGE is not a valid image reference."
+    exit 1
+fi
+
+if ! is_valid_port "${CINQUAIN_HTTP_PORT:-80}"; then
+    echo "CINQUAIN_HTTP_PORT must be a number from 1 to 65535."
+    exit 1
+fi
+
+if ! is_valid_port "${CINQUAIN_HTTPS_PORT:-443}"; then
+    echo "CINQUAIN_HTTPS_PORT must be a number from 1 to 65535."
     exit 1
 fi
 

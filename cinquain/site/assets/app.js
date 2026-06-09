@@ -1,4 +1,5 @@
 (function () {
+    var defaultImage = "ghcr.io/mcxiaocaibug/cinquain:main";
     var host = window.location.host || "";
     var serverName = host.replace(/:\d+$/, "") || "your domain";
     var nodes = document.querySelectorAll("[data-server-name]");
@@ -10,9 +11,12 @@
     function normaliseDomain(value) {
         return (value || "")
             .trim()
-            .replace(/^https?:\/\//, "")
+            .replace(/^https?:\/\//i, "")
             .replace(/\/.*$/, "")
-            .replace(/\s+/g, "");
+            .replace(/:\d+$/, "")
+            .replace(/\.$/, "")
+            .replace(/\s+/g, "")
+            .toLowerCase();
     }
 
     function isLikelyDomain(value) {
@@ -41,24 +45,52 @@
             "CINQUAIN_SUPPORT_EMAIL=" + values.email,
             "CINQUAIN_HTTP_PORT=80",
             "CINQUAIN_HTTPS_PORT=443",
-            "CINQUAIN_BACKUP_BEFORE_UPGRADE=1"
+            "CINQUAIN_BACKUP_BEFORE_UPGRADE=1",
+            "",
+            "# Optional build controls. Keep these defaults for normal prebuilt-image deploys.",
+            "CINQUAIN_ENABLE_CROSS_LTO=0",
+            "CINQUAIN_RUST_PROFILE=release-fast"
         ].join("\n");
+    }
+
+    function shellQuote(value) {
+        return "'" + String(value || "").replace(/'/g, "'\\''") + "'";
+    }
+
+    function buildInstallInvocation(values) {
+        return [
+            "CINQUAIN_BUILD_LOCALLY=" + (values.localBuild ? "1" : "0"),
+            "CINQUAIN_HOMESERVER_IMAGE=" + shellQuote(values.image),
+            "./install.sh",
+            shellQuote(values.domain),
+            shellQuote(values.email)
+        ].join(" ");
     }
 
     function buildInstallCommand(values) {
         return [
             "git clone https://github.com/Mcxiaocaibug/Cinquain.git",
             "cd Cinquain/cinquain",
-            "./install.sh " + values.domain + " " + values.email
+            buildInstallInvocation(values)
         ].join("\n");
     }
 
     function buildExistingRepoCommand(values) {
         return [
             "cd cinquain",
-            "./install.sh " + values.domain + " " + values.email
+            buildInstallInvocation(values)
         ].join("\n");
     }
+
+    window.CinquainDeploy = Object.freeze({
+        normaliseDomain: normaliseDomain,
+        isLikelyDomain: isLikelyDomain,
+        isLikelyEmail: isLikelyEmail,
+        buildEnv: buildEnv,
+        buildInstallCommand: buildInstallCommand,
+        buildExistingRepoCommand: buildExistingRepoCommand,
+        shellQuote: shellQuote
+    });
 
     function copyText(text, button) {
         function markCopied() {
@@ -116,14 +148,14 @@
 
     domainInput.value = saved.domain || defaultDomain;
     emailInput.value = saved.email || "admin@example.com";
-    imageInput.value = saved.image || "ghcr.io/mcxiaocaibug/cinquain:main";
+    imageInput.value = saved.image || defaultImage;
     localBuildInput.checked = saved.localBuild === true;
 
     function currentValues() {
         return {
             domain: normaliseDomain(domainInput.value),
             email: emailInput.value.trim(),
-            image: imageInput.value.trim() || "ghcr.io/mcxiaocaibug/cinquain:main",
+            image: imageInput.value.trim() || defaultImage,
             localBuild: localBuildInput.checked
         };
     }
