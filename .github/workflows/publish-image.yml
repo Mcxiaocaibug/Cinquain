@@ -91,6 +91,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             CONTINUWUITY_VERSION_EXTRA=+cinquain
+            ENABLE_CROSS_LTO=0
             GIT_COMMIT_HASH=${{ github.sha }}
             GIT_COMMIT_HASH_SHORT=${{ steps.commit.outputs.short_sha }}
             GIT_REMOTE_URL=https://github.com/${{ github.repository }}

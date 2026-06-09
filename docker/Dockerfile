@@ -135,13 +135,18 @@ RUN <<EOF
     echo "CXX=clang++" >> /etc/environment
 EOF
 
-# Cross-language LTO
+# Cross-language LTO is useful for tuned release builds, but it makes CI image
+# publication slow and fragile. Keep it opt-in for Cinquain's main deploy image.
+ARG ENABLE_CROSS_LTO=0
 RUN <<EOF
     set -o xtrace
-    echo "CFLAGS=-flto" >> /etc/environment
-    echo "CXXFLAGS=-flto" >> /etc/environment
-    # Linker is set to target-compatible clang by xx
-    echo "RUSTFLAGS='-Clinker-plugin-lto -Clink-arg=-fuse-ld=lld'" >> /etc/environment
+    if [ "${ENABLE_CROSS_LTO}" = "1" ]; then
+        echo "CFLAGS=-flto" >> /etc/environment
+        echo "CXXFLAGS=-flto" >> /etc/environment
+        echo "RUSTFLAGS='-Clinker-plugin-lto -Clink-arg=-fuse-ld=lld'" >> /etc/environment
+    else
+        echo "RUSTFLAGS='-Clink-arg=-fuse-ld=lld'" >> /etc/environment
+    fi
 EOF
 
 # Apply CPU-specific optimizations if TARGET_CPU is provided

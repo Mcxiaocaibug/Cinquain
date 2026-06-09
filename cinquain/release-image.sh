@@ -46,6 +46,7 @@ docker buildx build \
     --build-arg RUSTUP_DIST_SERVER="${CINQUAIN_RUSTUP_DIST_SERVER:-https://static.rust-lang.org}" \
     --build-arg RUSTUP_UPDATE_ROOT="${CINQUAIN_RUSTUP_UPDATE_ROOT:-https://static.rust-lang.org/rustup}" \
     --build-arg CARGO_REGISTRY_MIRROR="${CINQUAIN_CARGO_REGISTRY_MIRROR:-}" \
+    --build-arg ENABLE_CROSS_LTO="${CINQUAIN_ENABLE_CROSS_LTO:-0}" \
     --tag "$IMAGE_TAG" \
     "$OUTPUT_FLAG" \
     "$REPO_ROOT"
