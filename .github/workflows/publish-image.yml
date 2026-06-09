@@ -7,6 +7,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Docker platforms to build. Use linux/amd64 for fast deploy images, or linux/amd64,linux/arm64 for multi-arch releases."
+        required: true
+        default: "linux/amd64"
 
 permissions:
   contents: read
@@ -57,12 +62,28 @@ jobs:
         run: |
           echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
+      - name: Select Docker Platforms
+        id: platforms
+        shell: bash
+        run: |
+          selected_platforms="${{ inputs.platforms || '' }}"
+
+          if [ -z "$selected_platforms" ]; then
+            if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+              selected_platforms="linux/amd64,linux/arm64"
+            else
+              selected_platforms="linux/amd64"
+            fi
+          fi
+
+          echo "platforms=$selected_platforms" >> "$GITHUB_OUTPUT"
+
       - name: Build and Push Image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.platforms.outputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
