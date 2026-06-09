@@ -15,6 +15,11 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! docker compose version >/dev/null 2>&1; then
+    echo "Docker is installed, but the Compose v2 plugin is not available."
+    exit 1
+fi
+
 # shellcheck disable=SC1091
 . ./.env
 
@@ -22,7 +27,7 @@ if [ "${CINQUAIN_BACKUP_BEFORE_UPGRADE:-1}" = "1" ]; then
     ./backup.sh
 fi
 
-if [ "${CINQUAIN_BUILD_LOCALLY:-1}" = "1" ]; then
+if [ "${CINQUAIN_BUILD_LOCALLY:-0}" = "1" ]; then
     docker compose up -d --build
 else
     docker compose pull caddy homeserver

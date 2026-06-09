@@ -40,15 +40,14 @@
                 <p class="panel__eyebrow">Deploy flow</p>
                 <h2>Start the stack in three steps.</h2>
                 <ol class="steps">
-                    <li>Copy <code>.env.example</code> to <code>.env</code> and set your domain and operator email values.</li>
-                    <li>Run <code>./install.sh</code> from the <code>cinquain/</code> directory to pull the curated GHCR image and start the stack.</li>
+                    <li>Point DNS for your Matrix domain at the server.</li>
+                    <li>Run <code>./install.sh your-domain operator@example.com</code> from the <code>cinquain/</code> directory.</li>
                     <li>Open <a href="/bootstrap"><code>/bootstrap</code></a>, use the generated bootstrap secret, and create the first administrator.</li>
                 </ol>
                 <div class="command-card">
                     <p class="status-card__label">Primary command</p>
                     <pre><code>cd cinquain
-cp .env.example .env
-./install.sh</code></pre>
+./install.sh matrix.example.com admin@example.com</code></pre>
                 </div>
             </section>
 
@@ -58,6 +57,7 @@ cp .env.example .env
                 <ul class="link-list">
                     <li>Caddy on ports 80 and 443</li>
                     <li>Homeserver routing and `.well-known` discovery</li>
+                    <li>Compose network and persistent volume creation</li>
                     <li>Persistent RocksDB and Caddy volumes</li>
                     <li>Backup, upgrade, and release helper scripts</li>
                 </ul>

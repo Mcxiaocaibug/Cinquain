@@ -40,6 +40,12 @@ esac
 docker buildx build \
     --file "$REPO_ROOT/docker/Dockerfile" \
     --build-arg CONTINUWUITY_VERSION_EXTRA=+cinquain \
+    --build-arg DEBIAN_APT_MIRROR="${CINQUAIN_DEBIAN_APT_MIRROR:-http://deb.debian.org/debian}" \
+    --build-arg DEBIAN_SECURITY_APT_MIRROR="${CINQUAIN_DEBIAN_SECURITY_APT_MIRROR:-http://deb.debian.org/debian-security}" \
+    --build-arg LLVM_APT_MIRROR="${CINQUAIN_LLVM_APT_MIRROR:-https://apt.llvm.org}" \
+    --build-arg RUSTUP_DIST_SERVER="${CINQUAIN_RUSTUP_DIST_SERVER:-https://static.rust-lang.org}" \
+    --build-arg RUSTUP_UPDATE_ROOT="${CINQUAIN_RUSTUP_UPDATE_ROOT:-https://static.rust-lang.org/rustup}" \
+    --build-arg CARGO_REGISTRY_MIRROR="${CINQUAIN_CARGO_REGISTRY_MIRROR:-}" \
     --tag "$IMAGE_TAG" \
     "$OUTPUT_FLAG" \
     "$REPO_ROOT"

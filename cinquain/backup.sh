@@ -34,11 +34,21 @@ mkdir -p "$BACKUP_DIR"
 
 DB_VOLUME="${CINQUAIN_STACK_NAME}_db"
 CADDY_DATA_VOLUME="${CINQUAIN_STACK_NAME}_caddy_data"
+CADDY_CONFIG_VOLUME="${CINQUAIN_STACK_NAME}_caddy_config"
+
+for volume in "$DB_VOLUME" "$CADDY_DATA_VOLUME" "$CADDY_CONFIG_VOLUME"; do
+    if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+        echo "Missing Docker volume: $volume"
+        echo "Run ./install.sh before creating a backup."
+        exit 1
+    fi
+done
 
 docker run --rm \
     -v "$DB_VOLUME:/db:ro" \
     -v "$CADDY_DATA_VOLUME:/caddy:ro" \
+    -v "$CADDY_CONFIG_VOLUME:/caddy-config:ro" \
     -v "$BACKUP_DIR:/backup" \
-    busybox sh -c "tar czf /backup/$(basename "$ARCHIVE_PATH") -C / db caddy"
+    busybox sh -c "tar czf /backup/$(basename "$ARCHIVE_PATH") -C / db caddy caddy-config"
 
 echo "Created backup: $ARCHIVE_PATH"

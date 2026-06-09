@@ -3,86 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cinquain Deploy</title>
+    <title>Cinquain Deploy Console</title>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
-    <div class="page-shell page-shell--narrow">
-        <header class="support-header">
-            <p class="eyebrow">Deploy guide</p>
-            <h1>Bring up Cinquain on <span data-server-name>your domain</span> without assembling the network by hand.</h1>
-            <p class="lede">
-                This page is part of the product surface. It is meant to replace “go read scattered docs”
-                with one direct operator path.
-            </p>
+    <div class="page-shell">
+        <header class="hero hero--compact">
+            <div class="hero__copy">
+                <p class="eyebrow">Deploy console</p>
+                <h1>Generate a production Cinquain launch for <span data-server-name>your domain</span>.</h1>
+                <p class="lede">
+                    Fill in the two values that must be unique to your server. Cinquain generates
+                    the environment file and one-command installer path for a complete Matrix stack:
+                    Caddy TLS, reverse proxy, discovery, persistent database, and bootstrap UI.
+                </p>
+            </div>
+            <aside class="hero__panel launch-summary">
+                <p class="status-card__label">Launch target</p>
+                <dl class="summary-list">
+                    <div>
+                        <dt>Domain</dt>
+                        <dd data-live-domain>matrix.example.com</dd>
+                    </div>
+                    <div>
+                        <dt>Operator</dt>
+                        <dd data-live-email>admin@example.com</dd>
+                    </div>
+                    <div>
+                        <dt>Stack</dt>
+                        <dd>Docker Compose + Caddy + Continuwuity</dd>
+                    </div>
+                </dl>
+            </aside>
         </header>
 
-        <main class="stack">
-            <section class="panel">
+        <main class="launch-grid">
+            <section class="panel panel--strong">
                 <p class="panel__eyebrow">Step 1</p>
-                <h2>Prepare the environment file</h2>
-                <div class="command-card">
-                    <pre><code>cd cinquain
-cp .env.example .env</code></pre>
-                </div>
-                <p>Fill these values before first boot:</p>
-                <ul class="link-list">
-                    <li><code>CINQUAIN_SERVER_NAME</code></li>
-                    <li><code>CINQUAIN_ACME_EMAIL</code></li>
-                    <li><code>CINQUAIN_SUPPORT_EMAIL</code></li>
-                </ul>
-                <p><code>./install.sh</code> will generate <code>CINQUAIN_BOOTSTRAP_SECRET</code> automatically if it is empty.</p>
+                <h2>Choose the two required values</h2>
+                <form class="deploy-form" data-deploy-form>
+                    <label class="field">
+                        <span>Matrix domain</span>
+                        <input name="domain" type="text" inputmode="url" autocomplete="url" placeholder="matrix.example.com">
+                        <small>DNS A/AAAA should already point this host to your VPS.</small>
+                    </label>
+
+                    <label class="field">
+                        <span>Operator email</span>
+                        <input name="email" type="email" autocomplete="email" placeholder="admin@example.com">
+                        <small>Used for Let's Encrypt ACME and Matrix support metadata.</small>
+                    </label>
+
+                    <label class="field">
+                        <span>Homeserver image</span>
+                        <input name="image" type="text" autocomplete="off" placeholder="ghcr.io/mcxiaocaibug/cinquain:main">
+                        <small>Keep the default for the official Cinquain image, or use your own tag.</small>
+                    </label>
+
+                    <label class="toggle-row">
+                        <input name="localBuild" type="checkbox">
+                        <span>Build from source on this server instead of pulling the image</span>
+                    </label>
+                </form>
+
+                <p class="notice" data-deploy-validation></p>
             </section>
 
             <section class="panel">
                 <p class="panel__eyebrow">Step 2</p>
-                <h2>Run the one-command installer</h2>
-                <div class="command-card">
-                    <pre><code>./install.sh</code></pre>
-                </div>
+                <h2>Fresh VPS command</h2>
                 <p>
-                    The curated stack pulls the prebuilt GHCR image by default, then starts Caddy,
-                    the homeserver, persistent volumes, TLS handling, and Matrix discovery with one command.
+                    Use this when the server has Git, Docker, and the Docker Compose v2 plugin installed.
+                    The installer creates <code>.env</code>, generates <code>CINQUAIN_BOOTSTRAP_SECRET</code>,
+                    pulls the image, and starts the stack.
                 </p>
-                <p>If you want to build from source on the host instead, set <code>CINQUAIN_BUILD_LOCALLY=1</code> in <code>.env</code>.</p>
+                <div class="command-card command-card--copy">
+                    <button type="button" class="copy-button" data-copy-target="#install-output">Copy</button>
+                    <pre><code id="install-output"></code></pre>
+                </div>
             </section>
 
             <section class="panel">
                 <p class="panel__eyebrow">Step 3</p>
-                <h2>Create the first administrator in the runtime</h2>
-                <div class="command-card">
-                    <pre><code>https://your-domain/bootstrap</code></pre>
-                </div>
+                <h2>If the repo is already on the server</h2>
                 <p>
-                    Use the bootstrap secret stored in <code>.env</code> to unlock the guided setup
-                    page, then choose the username and password for the first administrator account.
+                    Run this from the repository root. This is the shortest release path for
+                    existing Cinquain deployments.
                 </p>
+                <div class="command-card command-card--copy">
+                    <button type="button" class="copy-button" data-copy-target="#existing-repo-output">Copy</button>
+                    <pre><code id="existing-repo-output"></code></pre>
+                </div>
             </section>
 
             <section class="panel">
-                <p class="panel__eyebrow">Step 4</p>
-                <h2>Verify the runtime</h2>
-                <div class="command-card">
-                    <pre><code>./doctor.sh</code></pre>
+                <p class="panel__eyebrow">Generated .env</p>
+                <h2>Inspectable configuration</h2>
+                <p>
+                    The installer writes these values automatically when you pass the domain and email.
+                    You can still inspect or edit <code>.env</code> before rerunning <code>./install.sh</code>.
+                </p>
+                <div class="command-card command-card--copy">
+                    <button type="button" class="copy-button" data-copy-target="#env-output">Copy</button>
+                    <pre><code id="env-output"></code></pre>
                 </div>
-                <p>Then visit these routes:</p>
-                <ul class="link-list">
-                    <li><a href="/bootstrap">/bootstrap</a></li>
-                    <li><a href="/support">/support</a></li>
-                    <li><a href="/_continuwuity/">/_continuwuity/</a></li>
-                    <li><a href="/.well-known/matrix/client">/.well-known/matrix/client</a></li>
-                    <li><a href="/.well-known/matrix/server">/.well-known/matrix/server</a></li>
-                </ul>
             </section>
 
-            <section class="panel">
-                <p class="panel__eyebrow">Operations</p>
-                <h2>Backup, upgrade, publish</h2>
-                <div class="command-card">
-                    <pre><code>./backup.sh
-./upgrade.sh
-./release-image.sh ghcr.io/your-org/cinquain:0.1.0</code></pre>
-                </div>
+            <section class="panel panel--wide">
+                <p class="panel__eyebrow">Runtime checklist</p>
+                <h2>What must be green before release</h2>
+                <ol class="steps steps--cards">
+                    <li>Ports <code>80</code> and <code>443</code> are open to the public internet.</li>
+                    <li><code>./install.sh</code> finishes without build or pull errors.</li>
+                    <li><code>https://your-domain/bootstrap</code> creates the first administrator.</li>
+                    <li><code>./doctor.sh</code> passes landing, support, bootstrap, discovery, and client API checks.</li>
+                    <li><code>./backup.sh</code> creates an archive before every major upgrade.</li>
+                </ol>
             </section>
         </main>
     </div>

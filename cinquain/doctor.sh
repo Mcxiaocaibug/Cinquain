@@ -18,6 +18,11 @@ fi
 # shellcheck disable=SC1091
 . ./.env
 
+if [ -z "${CINQUAIN_SERVER_NAME:-}" ] || [ "$CINQUAIN_SERVER_NAME" = "matrix.example.com" ]; then
+    echo "CINQUAIN_SERVER_NAME is not configured."
+    exit 1
+fi
+
 BASE_URL="https://$CINQUAIN_SERVER_NAME"
 
 check() {
@@ -49,6 +54,7 @@ check "Support page" "$BASE_URL/support" "Operator checklist" || failures=$((fai
 check "Bootstrap page" "$BASE_URL/bootstrap" "Bootstrap" || failures=$((failures + 1))
 check "Well-known client" "$BASE_URL/.well-known/matrix/client" "\"m.homeserver\"" || failures=$((failures + 1))
 check "Well-known server" "$BASE_URL/.well-known/matrix/server" "\"m.server\"" || failures=$((failures + 1))
+check "Well-known support" "$BASE_URL/.well-known/matrix/support" "\"support_page\"" || failures=$((failures + 1))
 check "Client versions" "$BASE_URL/_matrix/client/versions" "\"versions\"" || failures=$((failures + 1))
 
 if [ "$failures" -gt 0 ]; then

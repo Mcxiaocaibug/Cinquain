@@ -4,6 +4,12 @@
 
 {$CINQUAIN_SERVER_NAME} {
     encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+        -Server
+    }
 
     @matrix path /bootstrap /bootstrap/* /.well-known/matrix/* /_matrix/* /_continuwuity/*
     handle @matrix {
