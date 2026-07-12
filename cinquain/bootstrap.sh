@@ -18,7 +18,9 @@ info() { printf '\n==> %s\n' "$*"; }
 case "$PANEL_PORT" in
     ''|*[!0-9]*) die "CINQUAIN_PANEL_PORT 必须是数字。" ;;
 esac
-[ "$PANEL_PORT" -ge 1 ] && [ "$PANEL_PORT" -le 65535 ] || die "面板端口必须处于 1-65535。"
+if [ "$PANEL_PORT" -lt 1 ] || [ "$PANEL_PORT" -gt 65535 ]; then
+    die "面板端口必须处于 1-65535。"
+fi
 case "$PANEL_BIND" in
     127.0.0.1|::1|0.0.0.0) ;;
     *) die "面板监听地址仅支持 127.0.0.1、::1 或 0.0.0.0。" ;;
