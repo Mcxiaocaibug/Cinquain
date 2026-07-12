@@ -1,0 +1,111 @@
+#!/bin/sh
+
+set -eu
+
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+export ROOT_DIR
+# shellcheck disable=SC1091
+. "$ROOT_DIR/lib/common.sh"
+
+usage() {
+    cat <<'EOF'
+Cinquain 0.0.1 — 开箱即用的 Matrix homeserver
+
+用法:
+  ./cinquain panel                         启动受令牌保护的部署面板
+  ./cinquain deploy <域名> <邮箱> [镜像]   配置并部署
+  ./cinquain deploy                        使用现有配置部署
+  ./cinquain status                        查看容器状态
+  ./cinquain token                         显示首个管理员一次性注册令牌
+  ./cinquain logs [服务]                   查看日志
+  ./cinquain doctor                        执行生产健康检查
+  ./cinquain backup                        创建一致性离线备份
+  ./cinquain restore <归档>                恢复备份
+  ./cinquain upgrade [镜像]                备份后原子升级
+  ./cinquain preflight                     执行发布前验证
+EOF
+}
+
+deploy() {
+    if [ "$#" -ge 2 ]; then
+        domain=$1
+        email=$2
+        image=${3:-}
+        if [ -n "$image" ]; then
+            python3 "$ROOT_DIR/lib/config.py" "$domain" "$email" --image "$image"
+        else
+            python3 "$ROOT_DIR/lib/config.py" "$domain" "$email"
+        fi
+    elif [ "$#" -ne 0 ]; then
+        die "deploy 需要同时提供域名和邮箱。"
+    fi
+
+    require_tool python3
+    require_config
+    require_docker
+    info "验证 Docker Compose 配置"
+    compose config --quiet
+    info "拉取 Cinquain ${CINQUAIN_VERSION:-0.0.1} 运行镜像"
+    compose pull
+    info "启动 homeserver 与自动 HTTPS 入口"
+    compose up -d --remove-orphans
+    mkdir -p "$ROOT_DIR/state"
+    (umask 077; printf '%s\n' "$CINQUAIN_SERVER_NAME" > "$ROOT_DIR/state/server-name.lock")
+    "$ROOT_DIR/doctor.sh" --wait 180
+    info "部署完成"
+    echo "Homeserver: https://$CINQUAIN_SERVER_NAME"
+    echo "账户注册:  https://$CINQUAIN_SERVER_NAME/_continuwuity/account/register/"
+    echo "首次令牌:  ./cinquain token"
+}
+
+panel() {
+    require_tool python3
+    token=${CINQUAIN_PANEL_TOKEN:-}
+    if [ -z "$token" ]; then
+        if command -v openssl >/dev/null 2>&1; then
+            token=$(openssl rand -hex 24)
+        else
+            token=$(python3 -c 'import secrets; print(secrets.token_hex(24))')
+        fi
+    fi
+    bind=${CINQUAIN_PANEL_BIND:-127.0.0.1}
+    port=${CINQUAIN_PANEL_PORT:-7080}
+    echo "Cinquain 面板: http://$bind:$port/#token=$token"
+    echo "远程服务器建议通过 SSH 转发: ssh -L 7080:127.0.0.1:7080 <server>"
+    CINQUAIN_PANEL_TOKEN=$token CINQUAIN_PANEL_BIND=$bind CINQUAIN_PANEL_PORT=$port \
+        exec python3 "$ROOT_DIR/panel/server.py"
+}
+
+show_token() {
+    require_config
+    require_docker
+    logs=$(compose logs --no-color homeserver 2>&1 || true)
+    token=$(printf '%s\n' "$logs" | sed -n 's/.*registration token \([A-Za-z0-9_-][A-Za-z0-9_-]*\) .*/\1/p' | tail -n 1)
+    if [ -z "$token" ]; then
+        echo "未发现有效的首次注册令牌；管理员可能已经创建，或 homeserver 尚未就绪。" >&2
+        exit 1
+    fi
+    printf '%s\n' "$token"
+}
+
+command=${1:-help}
+[ "$#" -eq 0 ] || shift
+case "$command" in
+    panel) panel "$@" ;;
+    deploy) deploy "$@" ;;
+    status) require_config; require_docker; compose ps ;;
+    token) show_token ;;
+    logs)
+        require_config
+        require_docker
+        if [ "$#" -gt 0 ]; then compose logs --tail=300 "$1"; else compose logs --tail=300; fi
+        ;;
+    doctor) exec "$ROOT_DIR/doctor.sh" "$@" ;;
+    backup) exec "$ROOT_DIR/backup.sh" "$@" ;;
+    restore) exec "$ROOT_DIR/restore.sh" "$@" ;;
+    upgrade) exec "$ROOT_DIR/upgrade.sh" "$@" ;;
+    preflight) exec "$ROOT_DIR/preflight.sh" "$@" ;;
+    version|-v|--version) cat "$ROOT_DIR/VERSION" ;;
+    help|-h|--help) usage ;;
+    *) usage >&2; die "未知命令: $command" ;;
+esac

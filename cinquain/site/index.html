@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Cinquain · Matrix homeserver</title>
+  <meta name="description" content="A Cinquain Matrix homeserver powered by Continuwuity.">
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <main class="landing">
+    <nav><a class="brand" href="/"><span>C</span>Cinquain</a><a href="/support/">支持与状态</a></nav>
+    <section class="hero">
+      <p class="eyebrow">PRIVATE · FEDERATED · YOURS</p>
+      <h1>你的对话，<br><em>由你托管。</em></h1>
+      <p class="lede">这是一台已上线的 Matrix homeserver。它可以与全球 Matrix 网络联邦，同时由本服务器的运营者独立管理。</p>
+      <div class="actions">
+        <a class="primary" href="/_continuwuity/account/">管理账户</a>
+        <a href="https://matrix.org/ecosystem/clients/" rel="noopener">选择 Matrix 客户端</a>
+      </div>
+    </section>
+    <section class="features">
+      <article><span>01</span><h2>标准 Matrix</h2><p>兼容 Element 等 Matrix 客户端，支持端到端加密和跨服务器联邦。</p></article>
+      <article><span>02</span><h2>自动 HTTPS</h2><p>Caddy 自动申请和续期 TLS 证书，并提供标准 discovery 端点。</p></article>
+      <article><span>03</span><h2>Continuwuity</h2><p>基于高性能 Rust homeserver 核心，保持独立部署层与上游兼容。</p></article>
+    </section>
+    <footer><span>Cinquain 0.0.1</span><span>Powered by Continuwuity 26.6</span></footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.env
+continuwuity.toml
+state/
+backups/
+*.log
+__pycache__/
+*.pyc
