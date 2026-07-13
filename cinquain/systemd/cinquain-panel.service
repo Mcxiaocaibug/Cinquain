@@ -1,0 +1,35 @@
+[Unit]
+Description=Cinquain Matrix deployment panel
+Documentation=https://github.com/Mcxiaocaibug/Cinquain/tree/main/cinquain
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/cinquain
+EnvironmentFile=/etc/cinquain/panel.env
+ExecStart=/usr/bin/python3 /opt/cinquain/panel/server.py
+Restart=on-failure
+RestartSec=3s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadWritePaths=/opt/cinquain /run/docker.sock
+
+[Install]
+WantedBy=multi-user.target

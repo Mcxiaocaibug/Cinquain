@@ -19,12 +19,21 @@ pub(crate) async fn get_event_authorization_route(
 ) -> Result<get_event_authorization::v1::Response> {
 	AccessCheck {
 		services: &services,
-		origin: body.origin(),
+		origin: &body.identity,
 		room_id: &body.room_id,
 		event_id: None,
 	}
-	.check()
+	.assert()
 	.await?;
+
+	if services
+		.rooms
+		.pdu_metadata
+		.is_event_rejected(&body.event_id)
+		.await
+	{
+		return Err!(Request(NotFound("Event not found.")));
+	}
 
 	if !services
 		.rooms
@@ -33,7 +42,7 @@ pub(crate) async fn get_event_authorization_route(
 		.await
 	{
 		info!(
-			origin = body.origin().as_str(),
+			origin = body.identity.as_str(),
 			"Refusing to serve state for room we aren't participating in"
 		);
 		return Err!(Request(NotFound("This server is not participating in that room.")));

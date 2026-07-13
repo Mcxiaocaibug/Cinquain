@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Cinquain · Matrix 部署面板</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Cinquain 首页"><span class="mark">C</span><span>Cinquain</span></a>
+      <div class="status"><span class="dot" data-status-dot></span><span data-status-label>等待连接</span></div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Matrix homeserver · v<span data-version>0.0.1</span></p>
+        <h1>从空白服务器到<br><em>可用的 Matrix。</em></h1>
+        <p class="lede">填写域名与管理员邮箱。面板会验证配置、生成安全文件、拉取镜像、申请 TLS，并完成联邦与客户端接口检查。</p>
+      </section>
+
+      <div class="grid">
+        <section class="card setup-card">
+          <div class="card-heading"><span>01</span><div><h2>部署配置</h2><p>server_name 首次部署后不可更改。</p></div></div>
+          <form data-deploy-form>
+            <label>Matrix 域名<input name="domain" inputmode="url" autocomplete="url" placeholder="matrix.example.com" required></label>
+            <label>管理员邮箱<input name="email" type="email" autocomplete="email" placeholder="admin@example.com" required></label>
+            <div class="row">
+              <label>时区<input name="timezone" value="Asia/Shanghai" autocomplete="off"></label>
+              <label>备份保留数<input name="backup_retention" type="number" min="1" max="365" value="7"></label>
+            </div>
+            <details>
+              <summary>高级配置</summary>
+              <label>Homeserver 镜像<input name="image" value="ghcr.io/mcxiaocaibug/cinquain:0.0.1" autocomplete="off"></label>
+              <div class="row">
+                <label>HTTP 端口<input name="http_port" type="number" value="80"></label>
+                <label>HTTPS 端口<input name="https_port" type="number" value="443"></label>
+              </div>
+            </details>
+            <label class="confirm"><input name="immutable" type="checkbox" required><span>我确认 DNS 已指向此服务器，并理解 Matrix 域名部署后不可变。</span></label>
+            <button class="primary" type="submit" data-deploy-button>验证并自动部署</button>
+            <p class="feedback" data-feedback role="status"></p>
+          </form>
+        </section>
+
+        <section class="card runtime-card">
+          <div class="card-heading"><span>02</span><div><h2>实时执行</h2><p>所有动作串行执行，可安全重复。</p></div></div>
+          <div class="facts">
+            <div><small>域名</small><strong data-domain>尚未配置</strong></div>
+            <div><small>镜像</small><strong data-image>—</strong></div>
+          </div>
+          <div class="services" data-services>
+            <div><span class="service-dot"></span>homeserver <b>未启动</b></div>
+            <div><span class="service-dot"></span>caddy <b>未启动</b></div>
+          </div>
+          <div class="actions">
+            <button type="button" data-action="doctor">健康检查</button>
+            <button type="button" data-action="backup">立即备份</button>
+            <button type="button" data-action="upgrade">安全升级</button>
+          </div>
+          <div class="terminal">
+            <div><span></span><span></span><span></span><b data-operation>等待操作</b></div>
+            <pre data-log>部署日志将在这里实时显示。</pre>
+          </div>
+        </section>
+
+        <section class="card finish-card" data-onboarding hidden>
+          <div class="card-heading"><span>03</span><div><h2>创建首位管理员</h2><p>此一次性令牌仅在首次注册前有效。</p></div></div>
+          <div class="token-row"><code data-registration-token>等待 homeserver...</code><button type="button" data-copy-token>复制</button></div>
+          <a class="primary link-button" data-register-link href="#" target="_blank" rel="noopener">打开安全注册页</a>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

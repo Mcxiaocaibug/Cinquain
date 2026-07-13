@@ -15,7 +15,7 @@ use conduwuit::{
 		BoolExt, FutureBoolExt, IterStream, ReadyExt, TryFutureExtExt,
 		future::ReadyEqExt,
 		math::{ruma_from_usize, usize_from_ruma},
-		stream::WidebandExt,
+		stream::{TryIgnore, WidebandExt},
 	},
 	warn,
 };
@@ -41,6 +41,7 @@ use ruma::{
 	uint,
 };
 use service::account_data::AnyRawAccountDataEvent;
+use tokio::pin;
 
 use super::share_encrypted_room;
 use crate::{
@@ -69,9 +70,8 @@ pub(crate) async fn sync_events_v5_route(
 	ClientIp(client_ip): ClientIp,
 	body: Ruma<sync_events::v5::Request>,
 ) -> Result<sync_events::v5::Response> {
-	debug_assert!(DEFAULT_BUMP_TYPES.is_sorted(), "DEFAULT_BUMP_TYPES is not sorted");
-	let ref sender_user = body.sender_user().to_owned();
-	let ref sender_device = body.sender_device().to_owned();
+	let sender_user = body.identity.expect_sender_user()?;
+	let sender_device = body.identity.expect_sender_device()?;
 
 	services
 		.users
@@ -79,9 +79,6 @@ pub(crate) async fn sync_events_v5_route(
 		.await;
 
 	let mut body = body.body;
-
-	// Setup watchers, so if there's no response, we can wait for them
-	let watcher = services.sync.watch(sender_user, sender_device);
 
 	let next_batch = services.globals.next_count()?;
 
@@ -93,7 +90,7 @@ pub(crate) async fn sync_events_v5_route(
 		.and_then(|string| string.parse().ok())
 		.unwrap_or(0);
 
-	let snake_key = into_snake_key(sender_user.as_ref(), sender_device.as_str(), conn_id);
+	let snake_key = into_snake_key(sender_user, sender_device.as_str(), conn_id);
 
 	if globalsince != 0 && !services.sync.snake_connection_cached(&snake_key) {
 		return Err!(Request(UnknownPos(
@@ -220,7 +217,7 @@ pub(crate) async fn sync_events_v5_route(
 		// Stop hanging if new info arrives
 		let default = Duration::from_secs(30);
 		let duration = cmp::min(body.timeout.unwrap_or(default), default);
-		_ = tokio::time::timeout(duration, watcher).await;
+		_ = tokio::time::timeout(duration, services.sync.wait_for_wake(sender_user)).await;
 	}
 
 	let typing = collect_typing_events(services, sender_user, &body, &todo_rooms).await?;
@@ -858,12 +855,31 @@ where
 			continue;
 		};
 
-		let since_shortstatehash = services
-			.rooms
-			.user
-			.get_token_shortstatehash(room_id, globalsince)
-			.await
-			.ok();
+		let since_shortstatehash = async {
+			pin! {
+				let pdus_rev = services
+					.rooms
+					.timeline
+					.pdus_rev(room_id, Some(PduCount::Normal(globalsince.saturating_sub(1))))
+					.ignore_err();
+			}
+
+			let (count, pdu_at_last_sync_end) = pdus_rev.next().await?;
+
+			if matches!(count, PduCount::Backfilled(_)) {
+				None
+			} else {
+				Some(
+					services
+						.rooms
+						.state_accessor
+						.pdu_shortstatehash(&pdu_at_last_sync_end.event_id)
+						.await
+						.expect("pdu should have a shortstatehash"),
+				)
+			}
+		}
+		.await;
 
 		let encrypted_room = services
 			.rooms

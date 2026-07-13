@@ -1,118 +1,83 @@
 #!/bin/sh
 
 set -eu
-
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-REPO_ROOT=$(CDPATH= cd -- "$ROOT_DIR/.." && pwd)
-cd "$ROOT_DIR"
-
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+REPO_ROOT=$(CDPATH='' cd -- "$ROOT_DIR/.." && pwd)
 failures=0
 
-check_file() {
-    path=$1
-    if [ ! -f "$path" ]; then
-        echo "Missing required file: $path"
-        failures=$((failures + 1))
-    fi
-}
+pass() { printf '%-44s OK\n' "$1"; }
+fail() { printf '%-44s FAILED\n' "$1"; failures=$((failures + 1)); }
 
-check_shell() {
-    path=$1
-    if sh -n "$path"; then
-        echo "shell: $path OK"
-    else
-        failures=$((failures + 1))
-    fi
-}
-
-for path in \
-    .env.example \
-    Caddyfile \
-    docker-compose.yml \
-    site/index.html \
-    site/deploy/index.html \
-    site/support/index.html \
-    site/assets/app.css \
-    site/assets/app.js \
-    tests/deploy-console.mjs \
-    tests/install-smoke.sh
-do
-    check_file "$path"
+for file in \
+    VERSION .env.example docker-compose.yml Caddyfile continuwuity-resolv.conf \
+    cinquain install.sh bootstrap.sh doctor.sh backup.sh restore.sh upgrade.sh \
+    panel/server.py panel/site/index.html panel/site/app.css panel/site/app.js \
+    site/index.html site/support/index.html site/assets/app.css; do
+    [ -f "$ROOT_DIR/$file" ] || fail "required: $file"
 done
 
-for path in \
-    install.sh \
-    upgrade.sh \
-    backup.sh \
-    doctor.sh \
-    release-image.sh \
-    preflight.sh \
-    tests/install-smoke.sh
-do
-    check_shell "$path"
+for script in cinquain install.sh bootstrap.sh doctor.sh backup.sh restore.sh upgrade.sh preflight.sh lib/common.sh tests/install-smoke.sh; do
+    if sh -n "$ROOT_DIR/$script"; then pass "shell syntax: $script"; else fail "shell syntax: $script"; fi
 done
+
+if PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$ROOT_DIR/tests" -p 'test_*.py'; then
+    pass "Python unit/integration tests"
+else
+    fail "Python unit/integration tests"
+fi
+
+if sh "$ROOT_DIR/tests/install-smoke.sh"; then pass "installer smoke test"; else fail "installer smoke test"; fi
 
 if command -v node >/dev/null 2>&1; then
-    if node tests/deploy-console.mjs; then
-        :
-    else
-        failures=$((failures + 1))
-    fi
-else
-    echo "deploy-console: skipped because Node.js is unavailable"
-fi
-
-if sh tests/install-smoke.sh; then
-    :
-else
-    failures=$((failures + 1))
-fi
-
-if ! grep -q "data-deploy-form" site/deploy/index.html; then
-    echo "Deploy console is missing the guided form."
-    failures=$((failures + 1))
-fi
-
-if ! grep -q "data-copy-target" site/deploy/index.html; then
-    echo "Deploy console is missing copy controls."
-    failures=$((failures + 1))
-fi
-
-if ! grep -q "CINQUAIN_BOOTSTRAP_SECRET=" .env.example; then
-    echo ".env.example is missing CINQUAIN_BOOTSTRAP_SECRET."
-    failures=$((failures + 1))
+    if node "$ROOT_DIR/tests/panel-ui.mjs"; then pass "panel UI tests"; else fail "panel UI tests"; fi
 fi
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    tmp_env=$(mktemp "$ROOT_DIR/.env.preflight.XXXXXX")
-    cp .env.example "$tmp_env"
-    sed -i.bak \
-        -e "s/^CINQUAIN_SERVER_NAME=.*/CINQUAIN_SERVER_NAME=matrix.example.test/" \
-        -e "s/^CINQUAIN_ACME_EMAIL=.*/CINQUAIN_ACME_EMAIL=admin@example.test/" \
-        -e "s/^CINQUAIN_SUPPORT_EMAIL=.*/CINQUAIN_SUPPORT_EMAIL=admin@example.test/" \
-        "$tmp_env"
-
-    if docker compose --env-file "$tmp_env" config >/dev/null; then
-        echo "compose: config OK"
+    if docker compose --project-directory "$ROOT_DIR" --env-file "$ROOT_DIR/.env.example" -f "$ROOT_DIR/docker-compose.yml" config --quiet; then
+        pass "Docker Compose model"
     else
-        failures=$((failures + 1))
+        fail "Docker Compose model"
     fi
-
-    rm -f "$tmp_env" "$tmp_env.bak"
+elif command -v docker-compose >/dev/null 2>&1; then
+    if docker-compose --project-directory "$ROOT_DIR" --env-file "$ROOT_DIR/.env.example" -f "$ROOT_DIR/docker-compose.yml" config --quiet; then
+        pass "Docker Compose model"
+    else
+        fail "Docker Compose model"
+    fi
 else
-    echo "compose: skipped because Docker Compose v2 is unavailable"
+    echo "Docker Compose model                         SKIPPED (Docker unavailable)"
 fi
 
-if [ "${CINQUAIN_PREFLIGHT_CARGO:-0}" = "1" ]; then
-    cd "$REPO_ROOT"
-    cargo check --locked -p conduwuit
+if command -v caddy >/dev/null 2>&1; then
+    if CINQUAIN_SERVER_NAME=matrix.example.test CINQUAIN_OPERATOR_EMAIL=admin@example.test \
+        caddy validate --config "$ROOT_DIR/Caddyfile" >/dev/null 2>&1; then
+        pass "Caddy production configuration"
+    else
+        fail "Caddy production configuration"
+    fi
 fi
 
-if [ "$failures" -gt 0 ]; then
-    echo
-    echo "Cinquain preflight found $failures failure(s)."
-    exit 1
+if grep -R -nE 'CINQUAIN_PANEL_BIND:-0\.0\.0\.0|CINQUAIN_PANEL_TOKEN=[A-Za-z0-9]' "$ROOT_DIR" --exclude=preflight.sh >/dev/null 2>&1; then
+    fail "panel secrets and loopback defaults"
+else
+    pass "panel secrets and loopback defaults"
 fi
 
-echo
-echo "Cinquain preflight passed."
+if grep -R -nE 'image:.*:latest([[:space:]]|$)' "$ROOT_DIR/docker-compose.yml" >/dev/null 2>&1; then
+    fail "immutable production image tags"
+else
+    pass "immutable production image tags"
+fi
+
+if command -v shellcheck >/dev/null 2>&1; then
+    if shellcheck "$ROOT_DIR"/*.sh "$ROOT_DIR/cinquain" "$ROOT_DIR/lib"/*.sh "$ROOT_DIR/tests"/*.sh; then
+        pass "ShellCheck"
+    else
+        fail "ShellCheck"
+    fi
+fi
+
+if (cd "$REPO_ROOT" && git diff --check); then pass "git whitespace check"; else fail "git whitespace check"; fi
+
+[ "$failures" -eq 0 ] || { echo "Cinquain preflight: $failures 项失败" >&2; exit 1; }
+echo "Cinquain preflight 全部通过。"

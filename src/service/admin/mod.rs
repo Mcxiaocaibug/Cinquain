@@ -18,6 +18,8 @@ use futures::{Future, FutureExt, StreamExt, TryFutureExt};
 use loole::{Receiver, Sender};
 use ruma::{
 	OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
+	api::client::discovery::discover_support::{Contact, ContactRole},
+	assign,
 	events::{
 		Mentions,
 		room::message::{
@@ -28,7 +30,7 @@ use ruma::{
 use tokio::sync::RwLock;
 
 use crate::{
-	Dep, account_data, globals,
+	Dep, account_data, config, globals,
 	media::{MXC_LENGTH, mxc::Mxc},
 	rooms::{self, state::RoomMutexGuard},
 };
@@ -44,6 +46,7 @@ pub struct Service {
 
 struct Services {
 	server: Arc<Server>,
+	config: Dep<config::Service>,
 	globals: Dep<globals::Service>,
 	alias: Dep<rooms::alias::Service>,
 	timeline: Dep<rooms::timeline::Service>,
@@ -115,6 +118,7 @@ impl crate::Service for Service {
 		Ok(Arc::new(Self {
 			services: Services {
 				server: args.server.clone(),
+				config: args.depend::<config::Service>("config"),
 				globals: args.depend::<globals::Service>("globals"),
 				alias: args.depend::<rooms::alias::Service>("rooms::alias"),
 				timeline: args.depend::<rooms::timeline::Service>("rooms::timeline"),
@@ -549,6 +553,8 @@ impl Service {
 			return None;
 		}
 
+		// Trim leading spaces from commands
+		let trimmed_body: &str = body.trim_start();
 		if let Some(room_id) = event.room_id()
 			&& self.is_admin_room(room_id).await
 		{
@@ -556,7 +562,9 @@ impl Service {
 
 			// Ignore messages which aren't admin commands
 			let server_user = &self.services.globals.server_user;
-			if !(body.starts_with("!admin") || body.starts_with(server_user.as_str())) {
+			if !(trimmed_body.starts_with("!admin")
+				|| trimmed_body.starts_with(server_user.as_str()))
+			{
 				return None;
 			}
 
@@ -572,8 +580,8 @@ impl Service {
 			// This is a message outside the admin room
 
 			// Is it an escaped admin command? i.e. `\!admin --help`
-			let is_public_escape =
-				body.starts_with('\\') && body.trim_start_matches('\\').starts_with("!admin");
+			let is_public_escape = trimmed_body.starts_with('\\')
+				&& trimmed_body.trim_start_matches('\\').starts_with("!admin");
 
 			// Ignore the message if it's not
 			if !is_public_escape {
@@ -618,5 +626,53 @@ impl Service {
 		let receiver = &mut *self.services.services.write();
 		let weak = services.map(Arc::downgrade);
 		*receiver = weak;
+	}
+
+	/// Get the server's configured support contacts.
+	pub async fn get_support_contacts(&self) -> Vec<Contact> {
+		let email_address = self.services.config.well_known.support_email.clone();
+		let matrix_id = self.services.config.well_known.support_mxid.clone();
+		let pgp_key = self.services.config.well_known.support_pgp_key.clone();
+
+		// TODO: support defining multiple contacts in the config
+		let mut contacts: Vec<Contact> = vec![];
+
+		let role = self
+			.services
+			.config
+			.well_known
+			.support_role
+			.clone()
+			.unwrap_or(ContactRole::Admin);
+
+		// Add configured contact if at least one contact method is specified
+		let configured_contact = match (matrix_id, email_address) {
+			| (Some(matrix_id), email_address) =>
+				Some(assign!(Contact::with_matrix_id(role, matrix_id), { email_address })),
+			| (None, Some(email_address)) =>
+				Some(Contact::with_email_address(role, email_address)),
+			| (None, None) => None,
+		};
+
+		if let Some(mut configured_contact) = configured_contact {
+			configured_contact.pgp_key = pgp_key;
+
+			contacts.push(configured_contact);
+		}
+
+		// Try to add admin users as contacts if no contacts are configured
+		if contacts.is_empty() {
+			let admin_users = self.get_admins().await;
+
+			for user_id in &admin_users {
+				if *user_id == self.services.globals.server_user {
+					continue;
+				}
+
+				contacts.push(Contact::with_matrix_id(ContactRole::Admin, user_id.to_owned()));
+			}
+		}
+
+		contacts
 	}
 }

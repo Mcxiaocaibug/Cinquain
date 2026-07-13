@@ -11,12 +11,11 @@ use std::{
 use axum::extract::State;
 use axum_client_ip::ClientIp;
 use conduwuit::{
-	Err, Result, at, extract_variant,
+	Err, Result, at, error, extract_variant,
 	utils::{
 		ReadyExt, TryFutureExtExt,
 		stream::{BroadbandExt, Tools, WidebandExt},
 	},
-	warn,
 };
 use conduwuit_service::Services;
 use futures::{FutureExt, StreamExt, TryFutureExt, future::OptionFuture};
@@ -34,6 +33,7 @@ use ruma::{
 	},
 	assign,
 	events::presence::{PresenceEvent, PresenceEventContent},
+	presence::PresenceState,
 	serde::Raw,
 };
 use service::{
@@ -110,6 +110,9 @@ struct SyncContext<'a> {
 	/// The sync filter, which the client uses to specify what data should be
 	/// included in the sync response.
 	filter: &'a FilterDefinition,
+	/// Whether the state at the end of the timeline should be used when
+	/// calculating state diffs for sync.
+	use_state_after: bool,
 }
 
 impl<'a> SyncContext<'a> {
@@ -181,10 +184,11 @@ pub(crate) async fn sync_events_route(
 	ClientIp(client_ip): ClientIp,
 	body: Ruma<sync_events::v3::Request>,
 ) -> Result<sync_events::v3::Response> {
-	let (sender_user, sender_device) = body.sender();
+	let sender_user = body.identity.expect_sender_user()?;
+	let sender_device = body.identity.expect_sender_device()?;
 
 	// Presence update
-	if services.config.allow_local_presence {
+	if services.config.allow_local_presence && body.set_presence != PresenceState::Offline {
 		services
 			.presence
 			.ping_presence(sender_user, &body.body.set_presence)
@@ -196,9 +200,6 @@ pub(crate) async fn sync_events_route(
 		.users
 		.update_device_last_seen(sender_user, Some(sender_device), client_ip)
 		.await;
-
-	// Setup watchers, so if there's no response, we can wait for them
-	let watcher = services.sync.watch(sender_user, sender_device);
 
 	let response = build_sync_events(&services, &body).await?;
 	if body.body.full_state
@@ -215,7 +216,7 @@ pub(crate) async fn sync_events_route(
 	// Stop hanging if new info arrives
 	let default = Duration::from_secs(30);
 	let duration = cmp::min(body.body.timeout.unwrap_or(default), default);
-	_ = tokio::time::timeout(duration, watcher).await;
+	_ = tokio::time::timeout(duration, services.sync.wait_for_wake(sender_user)).await;
 
 	// Retry returning data
 	build_sync_events(&services, &body).await
@@ -225,7 +226,8 @@ pub(crate) async fn build_sync_events(
 	services: &Services,
 	body: &Ruma<sync_events::v3::Request>,
 ) -> Result<sync_events::v3::Response> {
-	let (syncing_user, syncing_device) = body.sender();
+	let syncing_user = body.identity.sender_user().expect("should have a user");
+	let syncing_device = body.identity.sender_device().expect("should have a device");
 
 	let current_count = services.globals.current_count()?;
 
@@ -261,6 +263,7 @@ pub(crate) async fn build_sync_events(
 		current_count,
 		full_state,
 		filter: &filter,
+		use_state_after: body.use_state_after,
 	};
 
 	let joined_rooms = services
@@ -273,7 +276,7 @@ pub(crate) async fn build_sync_events(
 			match joined_room {
 				| Ok((room, updates)) => Some((room_id, room, updates)),
 				| Err(err) => {
-					warn!(?err, %room_id, "error loading joined room");
+					error!(?err, %room_id, "error loading joined room");
 					None
 				},
 			}
@@ -302,7 +305,7 @@ pub(crate) async fn build_sync_events(
 				| Ok(Some(left_room)) => Some((room_id, left_room)),
 				| Ok(None) => None,
 				| Err(err) => {
-					warn!(?err, %room_id, "error loading joined room");
+					error!(?err, %room_id, "error loading joined room");
 					None
 				},
 			}
@@ -395,6 +398,10 @@ pub(crate) async fn build_sync_events(
 		.users
 		.count_one_time_keys(syncing_user, syncing_device);
 
+	let unused_fallback_key_types = services
+		.users
+		.list_unused_fallback_key_types(syncing_user, syncing_device);
+
 	let (
 		(joined_rooms, mut device_list_updates),
 		left_rooms,
@@ -405,6 +412,7 @@ pub(crate) async fn build_sync_events(
 		to_device_events,
 		keys_changed,
 		device_one_time_keys_count,
+		unused_fallback_key_types,
 	) = async {
 		futures::join!(
 			joined_rooms,
@@ -415,7 +423,8 @@ pub(crate) async fn build_sync_events(
 			account_data,
 			to_device_events,
 			keys_changed,
-			device_one_time_keys_count
+			device_one_time_keys_count,
+			unused_fallback_key_types,
 		)
 	}
 	.boxed()
@@ -433,8 +442,7 @@ pub(crate) async fn build_sync_events(
 		account_data: assign!(GlobalAccountData::new(), { events: account_data }),
 		device_lists: device_list_updates.into(),
 		device_one_time_keys_count,
-		// Fallback keys are not yet supported
-		device_unused_fallback_key_types: None,
+		device_unused_fallback_key_types: Some(unused_fallback_key_types),
 		presence: assign!(Presence::new(), {
 			events: presence_updates
 				.into_iter()

@@ -33,12 +33,13 @@ use ruma::{
 use service::{
 	Services,
 	rooms::{
+		membership::validate_remote_member_event_stub,
 		state::RoomMutexGuard,
 		state_compressor::{CompressedState, HashSetCompressStateEvent},
 	},
 };
 
-use super::{banned_room_check, join::join_room_by_id_helper, validate_remote_member_event_stub};
+use super::banned_room_check;
 use crate::Ruma;
 
 /// # `POST /_matrix/client/*/knock/{roomIdOrAlias}`
@@ -50,7 +51,7 @@ pub(crate) async fn knock_room_route(
 	ClientIp(client): ClientIp,
 	body: Ruma<knock_room::v3::Request>,
 ) -> Result<knock_room::v3::Response> {
-	let sender_user = body.sender_user();
+	let sender_user = body.identity.expect_sender_user()?;
 	let body = &body.body;
 	if services.users.is_suspended(sender_user).await? {
 		return Err!(Request(UserSuspended("You cannot perform this action while suspended.")));
@@ -238,15 +239,11 @@ async fn knock_room_by_id_helper(
 			// join_room_by_id_helper We need to release the lock here and let
 			// join_room_by_id_helper acquire it again
 			drop(state_lock);
-			match join_room_by_id_helper(
-				services,
-				sender_user,
-				room_id,
-				reason.clone(),
-				servers,
-				&None,
-			)
-			.await
+			match services
+				.rooms
+				.membership
+				.join_room(sender_user, room_id, reason.clone(), servers)
+				.await
 			{
 				| Ok(_) => return Ok(knock_room::v3::Response::new(room_id.to_owned())),
 				| Err(e) => {
@@ -346,7 +343,6 @@ async fn knock_room_helper_local(
 	let mut content = RoomMemberEventContent::new(MembershipState::Knock);
 	content.displayname = services.users.displayname(sender_user).await.ok();
 	content.avatar_url = services.users.avatar_url(sender_user).await.ok();
-	content.blurhash = services.users.blurhash(sender_user).await.ok();
 	content.reason.clone_from(&reason.clone());
 
 	// Try normal knock first
@@ -530,7 +526,6 @@ async fn knock_room_helper_remote(
 	let mut knock_content = RoomMemberEventContent::new(MembershipState::Knock);
 	knock_content.displayname = services.users.displayname(sender_user).await.ok();
 	knock_content.avatar_url = services.users.avatar_url(sender_user).await.ok();
-	knock_content.blurhash = services.users.blurhash(sender_user).await.ok();
 	knock_content.reason = reason;
 
 	knock_event_stub.insert(

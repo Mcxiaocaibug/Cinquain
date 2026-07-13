@@ -1,5 +1,5 @@
 use std::{
-	collections::{BTreeMap, HashMap, HashSet},
+	collections::{BTreeMap, HashMap},
 	net::IpAddr,
 	time::{Duration, Instant},
 };
@@ -7,9 +7,8 @@ use std::{
 use axum::extract::State;
 use axum_client_ip::ClientIp;
 use conduwuit::{
-	Err, Error, Result, debug, debug_warn, err, error,
+	Err, Error, Result, debug, debug_error, debug_warn, err, error,
 	result::LogErr,
-	state_res::lexicographical_topological_sort,
 	trace,
 	utils::{
 		IterStream, ReadyExt, millis_since_unix_epoch,
@@ -25,8 +24,7 @@ use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use http::StatusCode;
 use itertools::Itertools;
 use ruma::{
-	CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
-	OwnedUserId, RoomId, ServerName, UInt, UserId,
+	CanonicalJsonObject, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, ServerName, UserId,
 	api::{
 		error::{ErrorKind, LimitExceededErrorData},
 		federation::transactions::{
@@ -39,12 +37,12 @@ use ruma::{
 		},
 	},
 	events::receipt::{ReceiptEvent, ReceiptEventContent, ReceiptType},
-	int,
 	serde::Raw,
 	to_device::DeviceIdOrAllDevices,
 };
-use service::transactions::{
-	FederationTxnState, TransactionError, TxnKey, WrappedTransactionResponse,
+use service::{
+	rooms::event_handler::{DagBuilderTree, build_local_dag},
+	transactions::{FederationTxnState, TransactionError, TxnKey, WrappedTransactionResponse},
 };
 use tokio::sync::watch::{Receiver, Sender};
 use tracing::instrument;
@@ -62,7 +60,7 @@ pub(crate) async fn send_transaction_message_route(
 	ClientIp(client): ClientIp,
 	body: Ruma<send_transaction_message::v1::Request>,
 ) -> Result<send_transaction_message::v1::Response> {
-	if body.origin() != body.body.origin {
+	if body.identity != body.body.origin {
 		return Err!(Request(Forbidden(
 			"Not allowed to send transactions on behalf of other servers"
 		)));
@@ -80,7 +78,7 @@ pub(crate) async fn send_transaction_message_route(
 		)));
 	}
 
-	let txn_key = (body.origin().to_owned(), body.transaction_id.clone());
+	let txn_key = (body.identity.clone(), body.transaction_id.clone());
 
 	// Atomically check cache, join active, or start new transaction
 	match services
@@ -133,10 +131,11 @@ async fn wait_for_result(
 }
 
 #[instrument(
+	name="transaction"
 	skip_all,
 	fields(
 		id = ?body.transaction_id.as_str(),
-		origin = ?body.origin()
+		origin = ?body.identity
 	)
 )]
 async fn process_inbound_transaction(
@@ -151,7 +150,7 @@ async fn process_inbound_transaction(
 		.pdus
 		.iter()
 		.stream()
-		.broad_then(|pdu| services.rooms.event_handler.parse_incoming_pdu(pdu))
+		.broad_then(|pdu| services.rooms.event_handler.parse_incoming_pdu(pdu, None))
 		.inspect_err(|e| warn!("Could not parse incoming PDU: {e}"))
 		.ready_filter_map(Result::ok);
 
@@ -164,7 +163,7 @@ async fn process_inbound_transaction(
 		.stream();
 
 	debug!(pdus = body.pdus.len(), edus = body.edus.len(), "Processing transaction",);
-	let results = match handle(&services, &client, body.origin(), pdus, edus).await {
+	let results = match handle(&services, &client, &body.identity, pdus, edus).await {
 		| Ok(results) => results,
 		| Err(err) => {
 			fail_federation_txn(services, &txn_key, &sender, err);
@@ -174,8 +173,14 @@ async fn process_inbound_transaction(
 
 	for (id, result) in &results {
 		if let Err(e) = result {
-			if matches!(e, Error::BadRequest(ErrorKind::NotFound, _)) {
-				debug_warn!("Incoming PDU failed {id}: {e:?}");
+			match e {
+				| Error::BadRequest(
+					ErrorKind::Forbidden | ErrorKind::InvalidParam | ErrorKind::BadJson,
+					..,
+				) => {
+					debug_warn!("Incoming PDU {id} failed: {e:?}");
+				},
+				| _ => debug_error!("Incoming PDU {id} failed: {e:?}"),
 			}
 		}
 	}
@@ -236,7 +241,7 @@ async fn handle(
 	pdus: impl Stream<Item = Pdu> + Send,
 	edus: impl Stream<Item = Edu> + Send,
 ) -> std::result::Result<ResolvedMap, TransactionError> {
-	// group pdus by room
+	// Group PDUs by room for parallel processing
 	let pdus = pdus
 		.collect()
 		.map(|mut pdus: Vec<_>| {
@@ -247,7 +252,7 @@ async fn handle(
 		})
 		.await;
 
-	// we can evaluate rooms concurrently
+	// Evaluate rooms in parallel
 	let results: ResolvedMap = pdus
 		.into_iter()
 		.try_stream()
@@ -261,80 +266,12 @@ async fn handle(
 		.boxed()
 		.await?;
 
-	// evaluate edus after pdus, at least for now.
+	// Evaluate EDUs after PDUs in case some of the PDUs then forbid some EDUs.
 	edus.for_each_concurrent(automatic_width(), |edu| handle_edu(services, client, origin, edu))
 		.boxed()
 		.await;
 
 	Ok(results)
-}
-
-/// Attempts to build a localised directed acyclic graph out of the given PDUs,
-/// returning them in a topologically sorted order.
-///
-/// This is used to attempt to process PDUs in an order that respects their
-/// dependencies, however it is ultimately the sender's responsibility to send
-/// them in a processable order, so this is just a best effort attempt. It does
-/// not account for power levels or other tie breaks.
-async fn build_local_dag(
-	pdu_map: &HashMap<OwnedEventId, CanonicalJsonObject>,
-) -> Result<Vec<OwnedEventId>> {
-	debug_assert!(pdu_map.len() >= 2, "needless call to build_local_dag with less than 2 PDUs");
-	let mut dag: HashMap<OwnedEventId, HashSet<OwnedEventId>> =
-		HashMap::with_capacity(pdu_map.len());
-	let mut id_origin_ts: HashMap<OwnedEventId, _> = HashMap::with_capacity(pdu_map.len());
-
-	for (event_id, value) in pdu_map {
-		// We already checked that these properties are correct in parse_incoming_pdu,
-		// so it's safe to unwrap here.
-		// We also filter to remove any prev_events that are not in this pdu_map, as we
-		// need to have at least one event with zero out degrees for the lexico-topo
-		// sort below. If there are multiple events with omitted prevs, they will be
-		// ordered by timestamp, then event ID. At that point though, it's unlikely to
-		// matter.
-		let prev_events = value
-			.get("prev_events")
-			.unwrap()
-			.as_array()
-			.unwrap()
-			.iter()
-			.map(|v| EventId::parse(v.as_str().unwrap()).unwrap())
-			.filter(|id| pdu_map.contains_key(id))
-			.collect();
-
-		dag.insert(event_id.clone(), prev_events);
-		let origin_server_ts = value
-			.get("origin_server_ts")
-			.and_then(ruma::CanonicalJsonValue::as_integer)
-			.unwrap_or_default();
-		id_origin_ts.insert(event_id.clone(), origin_server_ts);
-	}
-
-	debug!(count = dag.len(), "Sorting incoming events with partial graph");
-	lexicographical_topological_sort(&dag, &async |node_id| {
-		// Note: we don't bother fetching power levels because that would massively slow
-		// this function down. This is a best-effort attempt to order events correctly
-		// for processing, however ultimately that should be the sender's job.
-		let ts = id_origin_ts
-			.get(&node_id)
-			.copied()
-			.unwrap_or_else(|| int!(0))
-			.to_string()
-			.parse::<u64>()
-			.ok()
-			.and_then(UInt::new)
-			.unwrap_or_default();
-		Ok((int!(0), MilliSecondsSinceUnixEpoch(ts)))
-	})
-	.await
-	.inspect(|sorted| {
-		debug_assert_eq!(
-			sorted.len(),
-			pdu_map.len(),
-			"Sorted graph was not the same size as the input graph"
-		);
-	})
-	.map_err(|e| err!("failed to resolve local graph: {e}"))
 }
 
 async fn handle_room(
@@ -352,27 +289,24 @@ async fn handle_room(
 		.await;
 
 	let room_id = &room_id;
-	let pdu_map: HashMap<OwnedEventId, CanonicalJsonObject> = pdus
+	let mut pdu_map: HashMap<OwnedEventId, CanonicalJsonObject> = pdus
 		.into_iter()
 		.map(|(_, event_id, value)| (event_id, value))
 		.collect();
 	// Try to sort PDUs by their dependencies, but fall back to arbitrary order on
 	// failure (e.g., cycles). This is best-effort; proper ordering is the sender's
 	// responsibility.
-	let sorted_event_ids = if pdu_map.len() >= 2 {
-		build_local_dag(&pdu_map).await.unwrap_or_else(|e| {
+	let sorted_event_ids = build_local_dag(&pdu_map, DagBuilderTree::PrevEvents)
+		.await
+		.unwrap_or_else(|e| {
 			debug_warn!("Failed to build local DAG for room {room_id}: {e}");
 			pdu_map.keys().cloned().collect()
-		})
-	} else {
-		pdu_map.keys().cloned().collect()
-	};
+		});
 	let mut results = Vec::with_capacity(sorted_event_ids.len());
 	for event_id in sorted_event_ids {
 		let value = pdu_map
-			.get(&event_id)
-			.expect("sorted event IDs must be from the original map")
-			.clone();
+			.remove(&event_id)
+			.expect("sorted event IDs must be from the original map");
 		services
 			.server
 			.check_running()
@@ -380,7 +314,8 @@ async fn handle_room(
 		let result = services
 			.rooms
 			.event_handler
-			.handle_incoming_pdu(origin, room_id, &event_id, value, true)
+			.handle_incoming_pdu(origin, room_id, &event_id, value, false)
+			.boxed()
 			.await
 			.map(|_| ());
 		results.push((event_id, result));
@@ -676,6 +611,14 @@ async fn handle_edu_direct_to_device(
 	messages
 		.into_iter()
 		.stream()
+		.broad_filter_map(|(target_user_id, map)| async move {
+			services
+				.users
+				.status(&target_user_id)
+				.await
+				.is_active()
+				.then_some((target_user_id, map))
+		})
 		.for_each_concurrent(automatic_width(), |(target_user_id, map)| {
 			handle_edu_direct_to_device_user(services, target_user_id, sender, &ev_type, map)
 		})

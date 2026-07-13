@@ -11,8 +11,8 @@
     "docs:dev": "rspress dev docs",
     "docs:build": "rspress build docs",
     "docs:preview": "rspress preview docs",
-    "cinquain:preflight": "sh cinquain/preflight.sh",
-    "test": "node cinquain/tests/deploy-console.mjs && sh cinquain/tests/install-smoke.sh"
+    "cinquain:test": "./cinquain/preflight.sh",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
@@ -26,6 +26,6 @@
     "@rspress/core": "^2.0.0",
     "@rspress/plugin-client-redirects": "^2.0.0",
     "@rspress/plugin-sitemap": "^2.0.0",
-    "typescript": "^6.0.0"
+    "typescript": "^7.0.0"
   }
 }

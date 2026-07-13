@@ -27,12 +27,9 @@ pub enum UserCommand {
 		username: String,
 		/// New password for the user, if unspecified one is generated
 		password: Option<String>,
-	},
 
-	/// Issue a self-service password reset link for a user.
-	IssuePasswordResetLink {
-		/// Username of the user who may use the link
-		username: String,
+		#[arg(long)]
+		convert_to_local_account: bool,
 	},
 
 	/// Get a user's associated email address.
@@ -161,6 +158,17 @@ pub enum UserCommand {
 	ListUsers,
 
 	/// Lists all the rooms (local and remote) that the specified user is
+	///   invited to
+	ListInvitedRooms {
+		user_id: String,
+	},
+
+	/// Manually make a user reject all current invites
+	RejectAllInvites {
+		user_id: String,
+	},
+
+	/// Lists all the rooms (local and remote) that the specified user is
 	///   joined in
 	ListJoinedRooms {
 		user_id: String,
@@ -168,8 +176,15 @@ pub enum UserCommand {
 
 	/// Manually join a local user to a room.
 	ForceJoinRoom {
+		/// The user to join
 		user_id: String,
+		/// The room to join
 		room_id: OwnedRoomOrAliasId,
+		/// The server name to join via.
+		///
+		/// This server will always be tried first, however if more are
+		/// available, they may be tried after.
+		via: Option<String>,
 	},
 
 	/// Manually leave a local user from a room.

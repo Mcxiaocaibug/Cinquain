@@ -10,7 +10,7 @@ use conduwuit_service::{Services, appservice::RegistrationInfo};
 use futures::FutureExt;
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, Int, MilliSecondsSinceUnixEpoch, OwnedRoomAliasId,
-	OwnedRoomId, OwnedUserId, RoomAliasId, RoomId, RoomVersionId, UserId,
+	OwnedUserId, RoomAliasId, RoomId, RoomVersionId, UserId,
 	api::client::room::{self, create_room},
 	assign,
 	events::{
@@ -24,6 +24,7 @@ use ruma::{
 			member::{MembershipState, RoomMemberEventContent},
 			name::RoomNameEventContent,
 			power_levels::RoomPowerLevelsEventContent,
+			server_acl::RoomServerAclEventContent,
 			topic::RoomTopicEventContent,
 		},
 	},
@@ -60,10 +61,10 @@ pub(crate) async fn create_room_route(
 ) -> Result<create_room::v3::Response> {
 	use create_room::v3::RoomPreset;
 
-	let sender_user = body.sender_user();
+	let sender_user = body.identity.expect_sender_user()?;
 
 	if !services.globals.allow_room_creation()
-		&& body.appservice_info.is_none()
+		&& !body.identity.is_appservice()
 		&& !services.users.is_admin(sender_user).await
 	{
 		return Err!(Request(Forbidden("Room creation has been disabled.",)));
@@ -86,25 +87,41 @@ pub(crate) async fn create_room_route(
 	};
 	let room_version_rules = room_version.rules().unwrap();
 
-	let room_id: Option<OwnedRoomId> = match room_version_rules.room_id_format {
-		| RoomIdFormatVersion::V1 => {
-			// Check for custom room ID field
-			if let Some(CanonicalJsonValue::String(room_id)) =
-				body.json_body.as_ref().unwrap().get("room_id")
-			{
-				Some(
-					RoomId::parse(room_id)
-						.map_err(|_| err!(Request(BadJson("Malformed custom room ID"))))?,
-				)
-			} else {
-				Some(RoomId::new_v1(services.globals.server_name()))
-			}
-		},
+	// For custom room IDs, if the user is creating a room with a v1 room ID format,
+	// we can just use that ID directly. However, if it's a custom *v2* room ID, we
+	// need to make sure that we don't generate one, which would in turn trick us
+	// into generating invalid v2 room events.
+	//
+	// expect_room_id is the custom room ID that the user is expecting - for v2
+	// formatted rooms, we check that the m.room.create event's generated room ID
+	// exactly matches this, and abort if it doesn't. Otherwise, we use it as the
+	// room ID itself.
+	let expect_room_id = {
+		let body_ref = body.json_body.as_ref().unwrap();
+		if let Some(CanonicalJsonValue::String(room_id)) = body_ref
+			.get("fi.mau.room_id")
+			.or_else(|| body_ref.get("room_id"))
+		{
+			Some(
+				RoomId::parse(room_id)
+					.map_err(|e| err!(Request(BadJson("Malformed custom room ID: {e}"))))?,
+			)
+		} else {
+			None
+		}
+	};
+
+	let room_id = match room_version_rules.room_id_format {
+		| RoomIdFormatVersion::V1 => Some(
+			expect_room_id
+				.clone()
+				.unwrap_or_else(|| RoomId::new_v1(services.globals.server_name())),
+		),
 		| _ => None,
 	};
 
 	// check if room ID doesn't already exist instead of erroring on auth check
-	if let Some(ref room_id) = room_id {
+	if let Some(room_id) = room_id.as_ref().or(expect_room_id.as_ref()) {
 		if services.rooms.short.get_shortroomid(room_id).await.is_ok() {
 			return Err!(Request(RoomInUse("Room with that custom room ID already exists",)));
 		}
@@ -113,7 +130,7 @@ pub(crate) async fn create_room_route(
 	if body.visibility == room::Visibility::Public
 		&& services.server.config.lockdown_public_room_directory
 		&& !services.users.is_admin(sender_user).await
-		&& body.appservice_info.is_none()
+		&& !body.identity.is_appservice()
 	{
 		warn!(
 			"Non-admin user {sender_user} tried to publish {room_id:?} to the room directory \
@@ -169,7 +186,7 @@ pub(crate) async fn create_room_route(
 
 	let alias: Option<OwnedRoomAliasId> = match body.room_alias_name.as_ref() {
 		| Some(alias) =>
-			Some(room_alias_check(&services, alias, body.appservice_info.as_ref()).await?),
+			Some(room_alias_check(&services, alias, body.identity.appservice_info()).await?),
 		| _ => None,
 	};
 
@@ -243,15 +260,16 @@ pub(crate) async fn create_room_route(
 
 	// Allow requesters to override the `origin_server_ts` to customize room ids
 	// from v12 onwards
-	let custom_origin_server_ts = body
-		.json_body
-		.as_ref()
-		.unwrap()
-		.get("origin_server_ts")
-		.and_then(CanonicalJsonValue::as_integer)
-		.map(Into::into)
-		.and_then(|value: i64| value.try_into().ok())
-		.map(MilliSecondsSinceUnixEpoch);
+	let custom_origin_server_ts = {
+		let body_ref = body.json_body.as_ref().unwrap();
+		body_ref
+			.get("origin_server_ts")
+			.or_else(|| body_ref.get("fi.mau.origin_server_ts"))
+			.and_then(CanonicalJsonValue::as_integer)
+			.map(Into::into)
+			.and_then(|value: i64| value.try_into().ok())
+			.map(MilliSecondsSinceUnixEpoch)
+	};
 
 	let create_event_id = services
 		.rooms
@@ -281,6 +299,13 @@ pub(crate) async fn create_room_route(
 	};
 	drop(state_lock);
 	debug!("Room created with ID {room_id}");
+	if let Some(expected_room_id) = expect_room_id
+		&& expected_room_id != room_id
+	{
+		return Err!(BadServerResponse(
+			"Room's final room ID was {room_id}, but expected {expected_room_id}"
+		));
+	}
 	let state_lock = services.rooms.state.mutex.lock(room_id.as_str()).await;
 
 	// 2. Let the room creator join
@@ -288,7 +313,6 @@ pub(crate) async fn create_room_route(
 	let mut join_event = RoomMemberEventContent::new(MembershipState::Join);
 	join_event.displayname = services.users.displayname(sender_user).await.ok();
 	join_event.avatar_url = services.users.avatar_url(sender_user).await.ok();
-	join_event.blurhash = services.users.blurhash(sender_user).await.ok();
 	join_event.is_direct = Some(body.is_direct);
 
 	debug_info!("Joining {sender_user} to room {room_id}");
@@ -313,14 +337,21 @@ pub(crate) async fn create_room_route(
 	});
 
 	let mut power_levels_to_grant = BTreeMap::from_iter([(sender_user.to_owned(), int!(100))]);
+	let mut creators: Vec<OwnedUserId> = vec![sender_user.to_owned()];
 
 	if preset == RoomPreset::TrustedPrivateChat {
-		for recipient_user in &invitees {
-			power_levels_to_grant.insert(recipient_user.clone(), int!(100));
+		for recipient_user in invitees.iter().cloned() {
+			if room_version_rules
+				.authorization
+				.explicitly_privilege_room_creators
+			{
+				creators.push(recipient_user);
+			} else {
+				power_levels_to_grant.insert(recipient_user, int!(100));
+			}
 		}
 	}
 
-	let mut creators: Vec<OwnedUserId> = vec![sender_user.to_owned()];
 	// Do we care about additional_creators?
 	if room_version_rules
 		.authorization
@@ -454,7 +485,32 @@ pub(crate) async fn create_room_route(
 		.boxed()
 		.await?;
 
-	// 6. Events listed in initial_state
+	// 6. Initial state events provided by the homeserver
+
+	let mut server_initial_state: Vec<PartialPdu> = Vec::new();
+
+	if let Some(allow_list) = services.server.config.default_room_acl_allow.clone() {
+		server_initial_state.push(PartialPdu::state(
+			String::new(),
+			&RoomServerAclEventContent::new(true, allow_list, vec![]),
+		));
+	} else if let Some(deny_list) = services.server.config.default_room_acl_deny.clone() {
+		server_initial_state.push(PartialPdu::state(
+			String::new(),
+			&RoomServerAclEventContent::new(true, vec!["*".to_owned()], deny_list),
+		));
+	}
+
+	for pdu in server_initial_state {
+		services
+			.rooms
+			.timeline
+			.build_and_append_pdu(pdu, sender_user, Some(&room_id), &state_lock)
+			.boxed()
+			.await?;
+	}
+
+	// 7. Events listed in initial_state
 	for event in &body.initial_state {
 		let mut partial_pdu = event
 			.deserialize_as_unchecked::<PartialPdu>()
@@ -482,7 +538,7 @@ pub(crate) async fn create_room_route(
 			.await?;
 	}
 
-	// 7. Events implied by name and topic
+	// 8. Events implied by name and topic
 	if let Some(name) = &body.name {
 		services
 			.rooms
@@ -511,7 +567,7 @@ pub(crate) async fn create_room_route(
 			.await?;
 	}
 
-	// 8. Events implied by invite (and TODO: invite_3pid)
+	// 9. Events implied by invite (and TODO: invite_3pid)
 	drop(state_lock);
 	for recipient_user in &invitees {
 		if let Err(e) =
@@ -537,10 +593,7 @@ pub(crate) async fn create_room_route(
 		if services.server.config.admin_room_notices {
 			services
 				.admin
-				.send_text(&format!(
-					"{sender_user} made {} public to the room directory",
-					&room_id
-				))
+				.send_text(&format!("{sender_user} made {room_id} public to the room directory"))
 				.await;
 		}
 		info!("{sender_user} made {0} public to the room directory", &room_id);

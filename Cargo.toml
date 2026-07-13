@@ -12,7 +12,7 @@ license = "Apache-2.0"
 # See also `rust-toolchain.toml`
 readme = "README.md"
 repository = "https://forgejo.ellis.link/continuwuation/continuwuity"
-version = "0.5.9"
+version = "26.6.0"
 
 [workspace.metadata.crane]
 name = "conduwuit"
@@ -39,10 +39,13 @@ features = ["ffi", "std", "union"]
 version = "1.1.0"
 
 [workspace.dependencies.ctor]
-version = "0.10.0"
+version = "1.0.6"
+
+[workspace.dependencies.dtor]
+version = "1.0.0"
 
 [workspace.dependencies.cargo_toml]
-version = "0.22"
+version = "1.0"
 default-features = false
 features = ["features"]
 
@@ -92,7 +95,6 @@ features = [
     "http2",
     "json",
     "matched-path",
-    "query",
     "tokio",
     "tracing",
 ]
@@ -122,7 +124,7 @@ default-features = false
 features = ["util"]
 
 [workspace.dependencies.tower-http]
-version = "0.6.8"
+version = "0.7.0"
 default-features = false
 features = [
     "add-extension",
@@ -138,6 +140,12 @@ features = [
 [workspace.dependencies.rustls]
 version = "0.23.25"
 default-features = false
+
+[workspace.dependencies.aws-lc-sys]
+version = "0.41.0"
+
+[workspace.dependencies.aws-lc-rs]
+version = "1.17.0"
 
 [workspace.dependencies.reqwest]
 version = "0.13.2"
@@ -162,7 +170,7 @@ features = ["raw_value"]
 
 # Used for appservice registration files
 [workspace.dependencies.serde-saphyr]
-version = "0.0.25"
+version = "0.0.29"
 
 # Used to load forbidden room/user regex from config
 [workspace.dependencies.serde_regex]
@@ -178,7 +186,7 @@ version = "0.5.3"
 features = ["alloc", "rand"]
 default-features = false
 
-# Used to generate thumbnails for images & blurhashes
+# Used to generate thumbnails for images
 [workspace.dependencies.image]
 version = "0.25.5"
 default-features = false
@@ -187,14 +195,6 @@ features = [
     "png",
     "gif",
     "webp",
-]
-
-[workspace.dependencies.blurhash]
-version = "0.2.3"
-default-features = false
-features = [
-    "fast-linear-to-srgb",
-    "image",
 ]
 
 # logging
@@ -302,7 +302,7 @@ default-features = false
 features = ["env", "toml"]
 
 [workspace.dependencies.hickory-resolver]
-version = "0.25.2"
+version = "0.26.0"
 default-features = false
 features = [
     "serde",
@@ -322,7 +322,7 @@ default-features = false
 
 # Used to make working with iterators easier, was already a transitive depdendency
 [workspace.dependencies.itertools]
-version = "0.14.0"
+version = "0.15.0"
 
 # to parse user-friendly time durations in admin commands
 #TODO: overlaps chrono?
@@ -350,7 +350,7 @@ version = "1.1.1"
 [workspace.dependencies.ruma]
 # version = "0.14.1"
 git = "https://github.com/ruma/ruma.git"
-rev = "5742fec0021b85fedbf5cd1f59c50a00bb5b9f7c"
+rev = "9b6a2e7323649af926e4b5363d87239ee4247f4a"
 features = [
     "appservice-api-c",
     "client-api",
@@ -362,7 +362,7 @@ features = [
     "ring-compat",
     "compat-upload-signatures",
     "compat-optional-txn-pdus",
-    "unstable-msc2448",
+    "compat-get-3pids",
     "unstable-msc2666",
     "unstable-msc2867",
     "unstable-msc2870",
@@ -380,18 +380,18 @@ features = [
     "unstable-msc4195",
     "unstable-msc4203",
     "unstable-msc4310",
-    "unstable-msc4373",
     "unstable-msc4380",
     "unstable-msc4143",
     "unstable-msc4293",
     "unstable-msc4406",
     "unstable-msc4439",
+    "unstable-msc4466",
     "unstable-extensible-events",
 ]
 
 [workspace.dependencies.rust-rocksdb]
 git = "https://forgejo.ellis.link/continuwuation/rust-rocksdb-zaidoon1"
-rev = "31fb8f772c7afcdc0061ab6a40cfa3a1be2fccd9"
+rev = "0a25ff92f7c09b55eec496b9c192c7d5136ab2b8"
 default-features = false
 features = [
     "multi-threaded-cf",
@@ -409,29 +409,32 @@ default-features = false
 version = "0.11.0"
 default-features = false
 
+[workspace.dependencies.openidconnect]
+version = "4.0.1"
+
 # optional opentelemetry, performance measurements, flamegraphs, etc for performance measurements and monitoring
 [workspace.dependencies.opentelemetry]
-version = "0.31.0"
+version = "0.32.0"
 
 [workspace.dependencies.tracing-flame]
 version = "0.2.0"
 
 [workspace.dependencies.tracing-opentelemetry]
-version = "0.32.0"
+version = "0.33.0"
 
 [workspace.dependencies.opentelemetry_sdk]
-version = "0.31.0"
+version = "0.32.0"
 features = ["rt-tokio"]
 
 [workspace.dependencies.opentelemetry-otlp]
-version = "0.31.0"
+version = "0.32.0"
 features = ["http", "grpc-tonic", "trace", "logs", "metrics"]
 
 
 
 # optional sentry metrics for crash/panic reporting
 [workspace.dependencies.sentry]
-version = "0.47.0"
+version = "0.48.0"
 default-features = false
 features = [
     "backtrace",
@@ -446,9 +449,9 @@ features = [
 ]
 
 [workspace.dependencies.sentry-tracing]
-version = "0.47.0"
+version = "0.48.0"
 [workspace.dependencies.sentry-tower]
-version = "0.47.0"
+version = "0.48.0"
 
 # jemalloc usage
 [workspace.dependencies.tikv-jemalloc-sys]
@@ -499,7 +502,7 @@ version = "0.4.9"
 default-features = false
 
 [workspace.dependencies.termimad]
-version = "0.34.0"
+version = "0.35.0"
 default-features = false
 
 [workspace.dependencies.checked_ops]
@@ -541,22 +544,17 @@ version = "2.1.1"
 features = ["std"]
 
 [workspace.dependencies.minicbor-serde]
-version = "0.6.0"
+version = "0.7.0"
 features = ["std"]
 
 [workspace.dependencies.maplit]
 version = "1.0.2"
 
-[workspace.dependencies.ldap3]
-version = "0.12.0"
-default-features = false
-features = ["sync", "tls-rustls", "rustls-provider"]
-
 [workspace.dependencies.yansi]
 version = "1.0.1"
 
 [workspace.dependencies.askama]
-version = "0.15.0"
+version = "0.16.0"
 
 [workspace.dependencies.lettre]
 version = "0.11.19"
@@ -570,6 +568,12 @@ features = ["std"]
 
 [workspace.dependencies.nonzero_ext]
 version = "0.3.0"
+
+[workspace.dependencies.resolvematrix]
+version = "1.1.0"
+
+[workspace.dependencies.serde_urlencoded]
+version = "0.7.1"
 
 #
 # Patches
@@ -670,10 +674,6 @@ path = "src/ruminuwuity"
 [profile.release]
 strip = "symbols"
 lto = "thin"
-
-[profile.release-fast]
-inherits = "release"
-lto = false
 
 # release profile with debug symbols
 [profile.release-debuginfo]

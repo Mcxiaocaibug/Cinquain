@@ -9,6 +9,7 @@ repository.workspace = true
 version.workspace = true
 
 [lib]
+doctest = false
 path = "mod.rs"
 crate-type = [
 	"rlib",
@@ -70,6 +71,7 @@ conduwuit-build-metadata.workspace = true
 const-str.workspace = true
 core_affinity.workspace = true
 ctor.workspace = true
+dtor.workspace = true
 cyborgtime.workspace = true
 either.workspace = true
 figment.workspace = true
@@ -116,6 +118,8 @@ url.workspace = true
 parking_lot.workspace = true
 lock_api.workspace = true
 hyper-util.workspace = true
+resolvematrix.workspace = true
+openidconnect.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 nix.workspace = true

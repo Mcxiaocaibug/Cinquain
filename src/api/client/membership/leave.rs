@@ -19,9 +19,8 @@ use ruma::{
 		room::member::{MembershipState, RoomMemberEventContent},
 	},
 };
-use service::Services;
+use service::{Services, rooms::membership::validate_remote_member_event_stub};
 
-use super::validate_remote_member_event_stub;
 use crate::Ruma;
 
 /// # `POST /_matrix/client/v3/rooms/{roomId}/leave`
@@ -33,10 +32,15 @@ pub(crate) async fn leave_room_route(
 	State(services): State<crate::State>,
 	body: Ruma<leave_room::v3::Request>,
 ) -> Result<leave_room::v3::Response> {
-	leave_room(&services, body.sender_user(), &body.room_id, body.reason.clone())
-		.boxed()
-		.await
-		.map(|()| leave_room::v3::Response::new())
+	leave_room(
+		&services,
+		body.identity.expect_sender_user()?,
+		&body.room_id,
+		body.reason.clone(),
+	)
+	.boxed()
+	.await
+	.map(|()| leave_room::v3::Response::new())
 }
 
 // Make a user leave all their joined rooms, rescinds knocks, forgets all rooms,
@@ -166,9 +170,7 @@ pub async fn leave_room(
 					 locally."
 				);
 
-				// return the existing leave state, if one exists. `mark_as_left` will then
-				// update the `roomuserid_leftcount` table, making the leave come down sync
-				// again.
+				// return the existing leave state, if one exists
 				services
 					.rooms
 					.state_cache
@@ -202,6 +204,8 @@ pub async fn leave_room(
 		.state_cache
 		.update_joined_count(room_id)
 		.await;
+
+	services.sync.wake(user_id).await;
 
 	Ok(())
 }

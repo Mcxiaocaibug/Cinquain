@@ -24,10 +24,10 @@ use ruma::{
 		power_levels::RoomPowerLevelsEventContent,
 	},
 };
-use service::{mailer::messages, uiaa::Identity};
+use service::{mailer::messages, uiaa::UiaaInitiator, users::HashedPassword};
 
-use super::{DEVICE_ID_LENGTH, TOKEN_LENGTH, join_room_by_id_helper};
-use crate::Ruma;
+use super::{DEVICE_ID_LENGTH, TOKEN_LENGTH};
+use crate::{Ruma, router::ClientIdentity};
 
 pub(crate) mod register;
 pub(crate) mod threepid;
@@ -49,41 +49,16 @@ pub(crate) async fn get_register_available_route(
 	ClientIp(client): ClientIp,
 	body: Ruma<get_username_availability::v3::Request>,
 ) -> Result<get_username_availability::v3::Response> {
-	// Validate user id
-	let user_id =
-		match UserId::parse_with_server_name(&body.username, services.globals.server_name()) {
-			| Ok(user_id) => {
-				if let Err(e) = user_id.validate_strict() {
-					return Err!(Request(InvalidUsername(debug_warn!(
-						"Username {} contains disallowed characters or spaces: {e}",
-						body.username
-					))));
-				}
-
-				user_id
-			},
-			| Err(e) => {
-				return Err!(Request(InvalidUsername(debug_warn!(
-					"Username {} is not valid: {e}",
-					body.username
-				))));
-			},
-		};
-
-	// Check if username is creative enough
-	if services.users.exists(&user_id).await {
-		return Err!(Request(UserInUse("User ID is not available.")));
-	}
-
-	if let Some(ref info) = body.appservice_info {
-		if !info.is_user_match(&user_id) {
-			return Err!(Request(Exclusive("Username is not in an appservice namespace.")));
-		}
-	}
-
-	if services.appservice.is_exclusive_user_id(&user_id).await {
-		return Err!(Request(Exclusive("Username is reserved by an appservice.")));
-	}
+	let _ = services
+		.users
+		.determine_registration_user_id(
+			Some(body.username.clone()),
+			None,
+			body.identity
+				.as_ref()
+				.and_then(ClientIdentity::appservice_info),
+		)
+		.await?;
 
 	Ok(get_username_availability::v3::Response::new(true))
 }
@@ -111,7 +86,7 @@ pub(crate) async fn change_password_route(
 	ClientIp(client): ClientIp,
 	body: Ruma<change_password::v3::Request>,
 ) -> Result<change_password::v3::Response> {
-	let identity = if let Some(ref user_id) = body.sender_user {
+	let identity = if let Some(identity) = body.identity.as_ref() {
 		// A signed-in user is trying to change their password, prompt them for their
 		// existing one
 
@@ -121,7 +96,10 @@ pub(crate) async fn change_password_route(
 				&body.auth,
 				vec![AuthFlow::new(vec![AuthType::Password])],
 				Box::default(),
-				Some(Identity::from_user_id(user_id)),
+				Some(UiaaInitiator::new(
+					identity.expect_sender_user()?,
+					identity.sender_device(),
+				)),
 			)
 			.await?
 	} else {
@@ -150,7 +128,7 @@ pub(crate) async fn change_password_route(
 
 	services
 		.users
-		.set_password(&sender_user, Some(&body.new_password))
+		.set_password(&sender_user, HashedPassword::new(&body.new_password)?)
 		.await?;
 
 	if body.logout_devices {
@@ -158,7 +136,12 @@ pub(crate) async fn change_password_route(
 		services
 			.users
 			.all_device_ids(&sender_user)
-			.ready_filter(|id| *id != body.sender_device())
+			.ready_filter(|id| {
+				body.identity
+					.as_ref()
+					.and_then(|identity| identity.sender_device())
+					.is_none_or(|sender_device| sender_device != *id)
+			})
 			.for_each(async |id| services.users.remove_device(&sender_user, &id).await)
 			.await;
 
@@ -174,7 +157,12 @@ pub(crate) async fn change_password_route(
 					.await
 					.ok()
 					.as_ref()
-					.is_some_and(|pusher_device| pusher_device != body.sender_device())
+					.is_some_and(|pusher_device| {
+						body.identity
+							.as_ref()
+							.and_then(|identity| identity.sender_device())
+							.is_none_or(|sender_device| sender_device != *pusher_device)
+					})
 					.then_some(pushkey)
 			})
 			.for_each(async |pushkey| {
@@ -188,7 +176,7 @@ pub(crate) async fn change_password_route(
 	if services.server.config.admin_room_notices {
 		services
 			.admin
-			.notice(&format!("User {} changed their password.", &sender_user))
+			.notice(&format!("User {sender_user} changed their password."))
 			.await;
 	}
 
@@ -239,20 +227,14 @@ pub(crate) async fn request_password_change_token_via_email_route(
 ///
 /// Note: Also works for Application Services
 pub(crate) async fn whoami_route(
-	State(services): State<crate::State>,
+	State(_): State<crate::State>,
 	body: Ruma<whoami::v3::Request>,
 ) -> Result<whoami::v3::Response> {
-	let is_guest = services
-		.users
-		.is_deactivated(body.sender_user())
-		.await
-		.map_err(|_| {
-			err!(Request(Forbidden("Application service has not registered this user.")))
-		})? && body.appservice_info.is_none();
-
-	Ok(assign!(whoami::v3::Response::new(body.sender_user().to_owned(), is_guest), {
-		device_id: body.sender_device.clone(),
-	}))
+	Ok(
+		assign!(whoami::v3::Response::new(body.identity.expect_sender_user()?.to_owned(), false), {
+			device_id: body.identity.sender_device().map(ToOwned::to_owned),
+		}),
+	)
 }
 
 /// # `POST /_matrix/client/r0/account/deactivate`
@@ -274,15 +256,24 @@ pub(crate) async fn deactivate_route(
 ) -> Result<deactivate::v3::Response> {
 	// Authentication for this endpoint is technically optional,
 	// but we require the user to be logged in
-	let sender_user = body
-		.sender_user
+	let identity = body
+		.identity
 		.as_ref()
 		.ok_or_else(|| err!(Request(MissingToken("Missing access token."))))?;
+
+	let sender_user = identity.expect_sender_user()?;
+
+	if !services.config.allow_deactivation {
+		return Err!(Request(Forbidden(
+			"You may not deactivate your own account. Contact your server's administrator for \
+			 assistance."
+		)));
+	}
 
 	// Prompt the user to confirm with their password using UIAA
 	let _ = services
 		.uiaa
-		.authenticate_password(&body.auth, Some(Identity::from_user_id(sender_user)))
+		.authenticate_password(&body.auth, sender_user, identity.sender_device(), None)
 		.await?;
 
 	// Remove profile pictures and display name
@@ -331,8 +322,6 @@ pub(crate) async fn check_registration_token_validity(
 /// Runs through all the deactivation steps:
 ///
 /// - Mark as deactivated
-/// - Removing display name
-/// - Removing avatar URL and blurhash
 /// - Removing all profile data
 /// - Leaving all rooms (and forgets all of them)
 pub async fn full_user_deactivate(

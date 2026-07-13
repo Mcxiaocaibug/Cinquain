@@ -4,7 +4,7 @@ use conduwuit::{Err, Result};
 use ruma::api::client::room::get_summary;
 use service::rooms::summary::Accessibility;
 
-use crate::Ruma;
+use crate::{Ruma, router::ClientIdentity};
 
 /// # `GET /_matrix/client/v1/room_summary/{roomIdOrAlias}`
 ///
@@ -28,7 +28,14 @@ pub(crate) async fn get_room_summary(
 	let summary = services
 		.rooms
 		.summary
-		.get_room_summary_for_user(body.sender_user.as_deref(), &room_id, &servers)
+		.get_room_summary_for_user(
+			body.identity
+				.as_ref()
+				.map(ClientIdentity::expect_sender_user)
+				.transpose()?,
+			&room_id,
+			&servers,
+		)
 		.await?;
 
 	match summary {

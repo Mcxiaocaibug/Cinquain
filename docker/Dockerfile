@@ -1,84 +1,38 @@
-# syntax=docker/dockerfile:1.7
-
 ARG RUST_VERSION=1
-ARG DEBIAN_VERSION=bookworm
+ARG DEBIAN_VERSION=trixie
 
 FROM --platform=$BUILDPLATFORM docker.io/tonistiigi/xx AS xx
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS base
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS toolchain
 
-ARG DEBIAN_APT_MIRROR=http://deb.debian.org/debian
-ARG DEBIAN_SECURITY_APT_MIRROR=http://deb.debian.org/debian-security
-ARG LLVM_APT_MIRROR=https://apt.llvm.org
-ARG RUSTUP_DIST_SERVER=https://static.rust-lang.org
-ARG RUSTUP_UPDATE_ROOT=https://static.rust-lang.org/rustup
-ARG RUSTUP_TOOLCHAIN=1.92.0
-ARG CARGO_REGISTRY_MIRROR=
-ENV RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER}
-ENV RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT}
-ENV RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN}
-ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
-ENV CARGO_NET_RETRY=10
-ENV CARGO_HTTP_MULTIPLEXING=false
-
 # Prevent deletion of apt cache
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
 
-RUN <<EOF
-    set -eux
-    if [ -f /etc/apt/sources.list.d/debian.sources ]; then
-        sed -i \
-            -e "s|http://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
-            -e "s|https://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
-            -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            /etc/apt/sources.list.d/debian.sources
-    elif [ -f /etc/apt/sources.list ]; then
-        sed -i \
-            -e "s|http://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
-            -e "s|https://deb.debian.org/debian|${DEBIAN_APT_MIRROR}|g" \
-            -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_APT_MIRROR}|g" \
-            /etc/apt/sources.list
-    fi
-EOF
-
 # Match Rustc version as close as possible
 # rustc -vV
-ARG LLVM_VERSION=21
+ARG LLVM_VERSION=22
 # ENV RUSTUP_TOOLCHAIN=${RUST_VERSION}
 
 # Install repo tools
 # Line one: compiler tools
-# Line two: curl, for downloading binaries and Git dependencies
+# Line two: curl, for downloading binaries and wget because llvm.sh is broken with curl
 # Line three: for xx-verify
 # golang, cmake: For aws-lc-rs bindgen
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y \
     pkg-config make jq \
-    ca-certificates curl git gnupg \
-    pax-utils \
+    wget curl git lsb-release gpg \
     file
     # golang cmake
 
 # LLVM packages
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOF
-    set -eux
-    . /etc/os-release
-    install -d -m 0755 /etc/apt/keyrings
-    curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
-        | gpg --dearmor -o /etc/apt/keyrings/apt.llvm.org.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.gpg] ${LLVM_APT_MIRROR}/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${LLVM_VERSION} main" \
-        > /etc/apt/sources.list.d/llvm.list
-    apt-get update
-    apt-get install -y clang-${LLVM_VERSION} lldb-${LLVM_VERSION} lld-${LLVM_VERSION} clangd-${LLVM_VERSION}
-EOF
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    curl https://apt.llvm.org/llvm.sh > llvm.sh && \
+    chmod +x llvm.sh && \
+    ./llvm.sh ${LLVM_VERSION} && \
+    rm llvm.sh
 
 # Create symlinks for LLVM tools
 RUN <<EOF
@@ -92,6 +46,25 @@ RUN <<EOF
     ln -s /usr/bin/lld-${LLVM_VERSION} /usr/bin/lld
     ln -s /usr/bin/lld-link-${LLVM_VERSION} /usr/bin/lld-link
     ln -s /usr/bin/wasm-ld-${LLVM_VERSION} /usr/bin/wasm-ld
+EOF
+
+# Developer tool versions
+# renovate: datasource=github-releases depName=cargo-bins/cargo-binstall
+ENV BINSTALL_VERSION=1.20.1
+# renovate: datasource=github-releases depName=psastras/sbom-rs
+ENV CARGO_SBOM_VERSION=0.9.1
+# renovate: datasource=crate depName=lddtree
+ENV LDDTREE_VERSION=0.5.0
+# renovate: datasource=crate depName=timelord-cli
+ENV TIMELORD_VERSION=3.0.1
+
+# Install unpackaged tools
+RUN <<EOF
+    set -o xtrace
+    curl --retry 5 -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+    cargo binstall --no-confirm cargo-sbom --version $CARGO_SBOM_VERSION
+    cargo binstall --no-confirm lddtree --version $LDDTREE_VERSION
+    cargo binstall --no-confirm timelord-cli --version $TIMELORD_VERSION
 EOF
 
 # Set up xx (cross-compilation scripts)
@@ -109,8 +82,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Set up Rust toolchain
 WORKDIR /app
 COPY ./rust-toolchain.toml .
-RUN rustup toolchain install "${RUSTUP_TOOLCHAIN}" --profile minimal \
-    && rustc --version \
+RUN rustc --version \
     && xx-cargo --setup-target-triple
 
 # Build binary
@@ -135,18 +107,13 @@ RUN <<EOF
     echo "CXX=clang++" >> /etc/environment
 EOF
 
-# Cross-language LTO is useful for tuned release builds, but it makes CI image
-# publication slow and fragile. Keep it opt-in for Cinquain's main deploy image.
-ARG ENABLE_CROSS_LTO=0
+# Cross-language LTO
 RUN <<EOF
     set -o xtrace
-    if [ "${ENABLE_CROSS_LTO}" = "1" ]; then
-        echo "CFLAGS=-flto" >> /etc/environment
-        echo "CXXFLAGS=-flto" >> /etc/environment
-        echo "RUSTFLAGS='-Clinker-plugin-lto -Clink-arg=-fuse-ld=lld'" >> /etc/environment
-    else
-        echo "RUSTFLAGS='-Clink-arg=-fuse-ld=lld'" >> /etc/environment
-    fi
+    echo "CFLAGS=-flto" >> /etc/environment
+    echo "CXXFLAGS=-flto" >> /etc/environment
+    # Linker is set to target-compatible clang by xx
+    echo "RUSTFLAGS='-Clinker-plugin-lto -Clink-arg=-fuse-ld=lld'" >> /etc/environment
 EOF
 
 # Apply CPU-specific optimizations if TARGET_CPU is provided
@@ -166,14 +133,6 @@ EOF
 # Prepare output directories
 RUN mkdir /out
 
-RUN <<EOF
-    set -eux
-    if [ -n "${CARGO_REGISTRY_MIRROR}" ]; then
-        mkdir -p /usr/local/cargo
-        printf '[source.crates-io]\nreplace-with = "mirror"\n\n[source.mirror]\nregistry = "%s"\n' "${CARGO_REGISTRY_MIRROR}" > /usr/local/cargo/config.toml
-    fi
-EOF
-
 FROM toolchain AS builder
 
 
@@ -182,12 +141,8 @@ COPY . .
 
 # Restore timestamps from timelord cache if available
 RUN --mount=type=cache,target=/timelord/ \
-    if command -v timelord >/dev/null 2>&1; then \
-        echo "Restoring timestamps from timelord cache"; \
-        timelord sync --source-dir /app --cache-dir /timelord; \
-    else \
-        echo "Skipping timelord timestamp restore"; \
-    fi
+    echo "Restoring timestamps from timelord cache"; \
+    timelord sync --source-dir /app --cache-dir /timelord;
 
 ARG TARGETPLATFORM
 
@@ -208,17 +163,16 @@ ENV GIT_REMOTE_COMMIT_URL=$GIT_REMOTE_COMMIT_URL
 ENV CONDUWUIT_VERSION_EXTRA=$CONDUWUIT_VERSION_EXTRA
 ENV CONTINUWUITY_VERSION_EXTRA=$CONTINUWUITY_VERSION_EXTRA
 
-ARG RUST_PROFILE=release-fast
+ARG RUST_PROFILE=release
 ARG CARGO_FEATURES="default"
 
 # Build the binary
-RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-registry-${TARGETPLATFORM},sharing=locked \
-    --mount=type=cache,target=/usr/local/cargo/git/db,id=continuwuity-cargo-git-${TARGETPLATFORM},sharing=locked \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/app/target,id=continuwuity-cargo-target-${TARGET_CPU}-${TARGETPLATFORM}-${RUST_PROFILE} \
     bash <<'EOF'
-    set -o errexit
+    set -euo pipefail
     set -o allexport
-    set -o pipefail
     set -o xtrace
     . /etc/environment
 
@@ -238,7 +192,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-re
             jq -r ".target_directory"))
     mkdir /out/sbin
     PACKAGE=conduwuit
-    xx-cargo build --locked --profile ${RUST_PROFILE} \
+    CARGO_LOG=debug xx-cargo build --locked --profile ${RUST_PROFILE} \
         --no-default-features --features ${CARGO_FEATURES} \
         -p $PACKAGE;
     BINARIES=($(cargo metadata --no-deps --format-version 1 | \
@@ -251,17 +205,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-re
 EOF
 
 # Generate Software Bill of Materials (SBOM)
-RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-registry-${TARGETPLATFORM},sharing=locked \
-    --mount=type=cache,target=/usr/local/cargo/git/db,id=continuwuity-cargo-git-${TARGETPLATFORM},sharing=locked \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git/db \
     bash <<'EOF'
-    set -o errexit
-    set -o pipefail
+    set -euo pipefail
     set -o xtrace
     mkdir /out/sbom
-    if ! cargo sbom --help >/dev/null 2>&1; then
-        echo "cargo-sbom is not installed; skipping SBOM generation"
-        exit 0
-    fi
     typeset -A PACKAGES
     for BINARY in /out/sbin/*; do
         BINARY_BASE=$(basename ${BINARY})

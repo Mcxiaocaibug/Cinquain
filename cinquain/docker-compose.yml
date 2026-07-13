@@ -1,71 +1,66 @@
-services:
-    caddy:
-        image: docker.io/caddy:latest
-        restart: unless-stopped
-        environment:
-            CINQUAIN_SERVER_NAME: ${CINQUAIN_SERVER_NAME}
-            CINQUAIN_ACME_EMAIL: ${CINQUAIN_ACME_EMAIL}
-        init: true
-        ports:
-            - "${CINQUAIN_HTTP_PORT:-80}:80"
-            - "${CINQUAIN_HTTPS_PORT:-443}:443"
-        volumes:
-            - ./Caddyfile:/etc/caddy/Caddyfile:ro
-            - ./site:/srv:ro
-            - caddy_data:/data
-            - caddy_config:/config
-        networks:
-            - edge
-        security_opt:
-            - no-new-privileges:true
-        depends_on:
-            - homeserver
+name: ${CINQUAIN_STACK_NAME:-cinquain}
 
-    homeserver:
-        build:
-            context: ..
-            dockerfile: docker/Dockerfile
-            args:
-                CONTINUWUITY_VERSION_EXTRA: "+cinquain"
-                DEBIAN_APT_MIRROR: ${CINQUAIN_DEBIAN_APT_MIRROR:-http://deb.debian.org/debian}
-                DEBIAN_SECURITY_APT_MIRROR: ${CINQUAIN_DEBIAN_SECURITY_APT_MIRROR:-http://deb.debian.org/debian-security}
-                LLVM_APT_MIRROR: ${CINQUAIN_LLVM_APT_MIRROR:-https://apt.llvm.org}
-                RUSTUP_DIST_SERVER: ${CINQUAIN_RUSTUP_DIST_SERVER:-https://static.rust-lang.org}
-                RUSTUP_UPDATE_ROOT: ${CINQUAIN_RUSTUP_UPDATE_ROOT:-https://static.rust-lang.org/rustup}
-                CARGO_REGISTRY_MIRROR: ${CINQUAIN_CARGO_REGISTRY_MIRROR:-}
-                ENABLE_CROSS_LTO: ${CINQUAIN_ENABLE_CROSS_LTO:-0}
-                RUST_PROFILE: ${CINQUAIN_RUST_PROFILE:-release-fast}
-        image: ${CINQUAIN_HOMESERVER_IMAGE}
-        restart: unless-stopped
-        init: true
-        environment:
-            CONTINUWUITY_SERVER_NAME: ${CINQUAIN_SERVER_NAME}
-            CONTINUWUITY_DATABASE_PATH: /var/lib/continuwuity
-            CONTINUWUITY_ADDRESS: 0.0.0.0
-            CONTINUWUITY_PORT: 8008
-            CONTINUWUITY_ALLOW_REGISTRATION: "false"
-            CONTINUWUITY_BOOTSTRAP_SECRET: ${CINQUAIN_BOOTSTRAP_SECRET}
-            CONTINUWUITY_WELL_KNOWN__CLIENT: https://${CINQUAIN_SERVER_NAME}
-            CONTINUWUITY_WELL_KNOWN__SERVER: ${CINQUAIN_SERVER_NAME}:443
-            CONTINUWUITY_WELL_KNOWN__SUPPORT_PAGE: https://${CINQUAIN_SERVER_NAME}/support
-            CONTINUWUITY_WELL_KNOWN__SUPPORT_EMAIL: ${CINQUAIN_SUPPORT_EMAIL}
-        volumes:
-            - db:/var/lib/continuwuity
-            - ./continuwuity-resolv.conf:/etc/resolv.conf:ro
-        networks:
-            - edge
-        security_opt:
-            - no-new-privileges:true
-        stop_grace_period: 60s
+services:
+  homeserver:
+    image: ${CINQUAIN_HOMESERVER_IMAGE:-ghcr.io/mcxiaocaibug/cinquain:0.0.1}
+    pull_policy: missing
+    command: /sbin/conduwuit
+    restart: unless-stopped
+    init: true
+    environment:
+      CONTINUWUITY_CONFIG: /etc/continuwuity/continuwuity.toml
+      RUST_LOG: ${CINQUAIN_LOG_LEVEL:-info}
+      TZ: ${CINQUAIN_TIMEZONE:-UTC}
+    volumes:
+      - homeserver_data:/var/lib/continuwuity
+      - ./continuwuity.toml:/etc/continuwuity/continuwuity.toml:ro
+      - ./continuwuity-resolv.conf:/etc/resolv.conf:ro
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+  caddy:
+    image: ${CINQUAIN_CADDY_IMAGE:-docker.io/caddy:2.11.4-alpine}
+    pull_policy: missing
+    restart: unless-stopped
+    init: true
+    environment:
+      CINQUAIN_SERVER_NAME: ${CINQUAIN_SERVER_NAME:?CINQUAIN_SERVER_NAME is required}
+      CINQUAIN_OPERATOR_EMAIL: ${CINQUAIN_OPERATOR_EMAIL:?CINQUAIN_OPERATOR_EMAIL is required}
+    ports:
+      - "${CINQUAIN_HTTP_PORT:-80}:80"
+      - "${CINQUAIN_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - homeserver
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
 
 networks:
-    edge:
-        name: ${CINQUAIN_STACK_NAME}_edge
+  edge:
+  backend:
+    internal: true
 
 volumes:
-    db:
-        name: ${CINQUAIN_STACK_NAME}_db
-    caddy_data:
-        name: ${CINQUAIN_STACK_NAME}_caddy_data
-    caddy_config:
-        name: ${CINQUAIN_STACK_NAME}_caddy_config
+  homeserver_data:
+  caddy_data:
+  caddy_config:

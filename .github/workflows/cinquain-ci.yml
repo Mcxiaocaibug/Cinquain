@@ -1,0 +1,89 @@
+name: Cinquain Release Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cinquain-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate deployment product
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run complete Cinquain preflight
+        run: ./cinquain/preflight.sh
+
+      - name: Validate Caddy configuration
+        run: >-
+          docker run --rm
+          -e CINQUAIN_SERVER_NAME=matrix.example.test
+          -e CINQUAIN_OPERATOR_EMAIL=admin@example.test
+          -v "$PWD/cinquain/Caddyfile:/etc/caddy/Caddyfile:ro"
+          docker.io/caddy:2.11.4-alpine
+          caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Verify executable release files
+        run: |
+          test -x cinquain/bootstrap.sh
+          test -x cinquain/install.sh
+          test -x cinquain/cinquain
+          test "$(cat cinquain/VERSION)" = "0.0.1"
+
+  image:
+    name: Build release image (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build without publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          cache-from: type=gha,scope=cinquain-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=cinquain-${{ matrix.platform }}
+          build-args: |
+            CONTINUWUITY_VERSION_EXTRA=+cinquain.0.0.1
+            GIT_COMMIT_HASH=${{ github.sha }}
+            GIT_COMMIT_HASH_SHORT=${{ github.sha }}
+            GIT_REMOTE_URL=https://github.com/${{ github.repository }}
+            GIT_REMOTE_COMMIT_URL=https://github.com/${{ github.repository }}/commit/${{ github.sha }}

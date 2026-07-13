@@ -36,7 +36,7 @@ pub(crate) async fn report_room_route(
 	ClientIp(client): ClientIp,
 	body: Ruma<report_room::v3::Request>,
 ) -> Result<report_room::v3::Response> {
-	let sender_user = body.sender_user();
+	let sender_user = body.identity.expect_sender_user()?;
 	if services.users.is_suspended(sender_user).await? {
 		return Err!(Request(UserSuspended("You cannot perform this action while suspended.")));
 	}
@@ -92,7 +92,7 @@ pub(crate) async fn report_event_route(
 	body: Ruma<report_content::v3::Request>,
 ) -> Result<report_content::v3::Response> {
 	// user authentication
-	let sender_user = body.sender_user();
+	let sender_user = body.identity.expect_sender_user()?;
 	if services.users.is_suspended(sender_user).await? {
 		return Err!(Request(UserSuspended("You cannot perform this action while suspended.")));
 	}
@@ -135,8 +135,8 @@ pub(crate) async fn report_user_route(
 	ClientIp(client): ClientIp,
 	body: Ruma<report_user::v3::Request>,
 ) -> Result<report_user::v3::Response> {
-	// user authentication
-	let sender_user = body.sender_user.as_ref().expect("user is authenticated");
+	let sender_user = body.identity.expect_sender_user()?;
+
 	if services.users.is_suspended(sender_user).await? {
 		return Err!(Request(UserSuspended("You cannot perform this action while suspended.")));
 	}
@@ -149,7 +149,7 @@ pub(crate) async fn report_user_route(
 
 	delay_response().await;
 
-	if !services.users.is_active_local(&body.user_id).await {
+	if !services.users.status(&body.user_id).await.is_found() {
 		// return 200 as to not reveal if the user exists. Recommended by spec.
 		return Ok(report_user::v3::Response::new());
 	}
@@ -219,14 +219,14 @@ async fn is_event_report_valid(
 fn build_report(report: Report) -> RoomMessageEventContent {
 	let mut text =
 		format!("@room New {} report received from {}:\n\n", report.report_type, report.sender);
-	if report.user_id.is_some() {
-		let _ = writeln!(text, "- Reported User ID: `{}`", report.user_id.unwrap());
+	if let Some(user_id) = report.user_id {
+		let _ = writeln!(text, "- Reported User ID: `{user_id}`");
 	}
-	if report.room_id.is_some() {
-		let _ = writeln!(text, "- Reported Room ID: `{}`", report.room_id.unwrap());
+	if let Some(room_id) = report.room_id {
+		let _ = writeln!(text, "- Reported Room ID: `{room_id}`");
 	}
-	if report.event_id.is_some() {
-		let _ = writeln!(text, "- Reported Event ID: `{}`", report.event_id.unwrap());
+	if let Some(event_id) = report.event_id {
+		let _ = writeln!(text, "- Reported Event ID: `{event_id}`");
 	}
 	let _ = writeln!(text, "- Report Reason: {}", report.reason);
 
