@@ -19,3 +19,5 @@ Initial production release.
 - Added local release preflight, Python API/config tests, CLI smoke tests,
   browser-panel tests, GitHub CI, multi-architecture signed container publishing,
   SBOM/provenance generation and automated release bundles.
+- Isolated and locked Cargo caches per target platform, enabled resilient Git
+  submodule fetching, and reused CI architecture caches during release builds.

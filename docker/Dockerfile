@@ -1,9 +1,18 @@
+# syntax=docker/dockerfile:1.7
+
 ARG RUST_VERSION=1
 ARG DEBIAN_VERSION=trixie
 
 FROM --platform=$BUILDPLATFORM docker.io/tonistiigi/xx AS xx
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS base
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS toolchain
+
+# Cargo's libgit2 backend is unreliable when fetching nested submodules in
+# concurrent multi-platform builds. Use the system Git client and tolerate
+# transient registry/network failures.
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    CARGO_NET_RETRY=10 \
+    CARGO_HTTP_MULTIPLEXING=false
 
 # Prevent deletion of apt cache
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
@@ -167,8 +176,8 @@ ARG RUST_PROFILE=release
 ARG CARGO_FEATURES="default"
 
 # Build the binary
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git/db \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-registry-${TARGETPLATFORM},sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git/db,id=continuwuity-cargo-git-${TARGETPLATFORM},sharing=locked \
     --mount=type=cache,target=/app/target,id=continuwuity-cargo-target-${TARGET_CPU}-${TARGETPLATFORM}-${RUST_PROFILE} \
     bash <<'EOF'
     set -euo pipefail
@@ -205,8 +214,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 EOF
 
 # Generate Software Bill of Materials (SBOM)
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git/db \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=continuwuity-cargo-registry-${TARGETPLATFORM},sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git/db,id=continuwuity-cargo-git-${TARGETPLATFORM},sharing=locked \
     bash <<'EOF'
     set -euo pipefail
     set -o xtrace
