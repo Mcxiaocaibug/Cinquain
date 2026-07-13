@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="cinquain/assets/logo-circular.png" alt="Cinquain logo" width="220">
+</p>
+
 # Cinquain
 
 > Production-ready, web-guided Matrix homeserver deployment built on the latest
