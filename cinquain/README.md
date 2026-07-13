@@ -8,6 +8,12 @@ private fork of the protocol implementation.
 This release is based on Continuwuity `26.6.0` plus upstream `main` through
 commit `4001b99261a81ad41adcb691b3e89b3a2eb9639c` (2026-07-11).
 
+## Documentation index
+
+- [中文小白部署指南](docs/GUIDE.zh-CN.md)
+- [English beginner's deployment guide](docs/GUIDE.en.md)
+- This page: complete deployment, architecture, operations and recovery reference
+
 ## What is automated
 
 - Docker Engine and Compose v2 installation on supported Linux distributions
