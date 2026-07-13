@@ -7,13 +7,6 @@ FROM --platform=$BUILDPLATFORM docker.io/tonistiigi/xx AS xx
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS base
 FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_VERSION} AS toolchain
 
-# Cargo's libgit2 backend is unreliable when fetching nested submodules in
-# concurrent multi-platform builds. Use the system Git client and tolerate
-# transient registry/network failures.
-ENV CARGO_NET_GIT_FETCH_WITH_CLI=true \
-    CARGO_NET_RETRY=10 \
-    CARGO_HTTP_MULTIPLEXING=false
-
 # Prevent deletion of apt cache
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
 
@@ -143,6 +136,14 @@ EOF
 RUN mkdir /out
 
 FROM toolchain AS builder
+
+# Cargo's libgit2 backend is unreliable when fetching nested submodules in
+# concurrent multi-platform builds. Use the system Git client and tolerate
+# transient registry/network failures. Keep this in the builder stage so the
+# expensive shared toolchain layers remain cacheable when policy changes.
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    CARGO_NET_RETRY=10 \
+    CARGO_HTTP_MULTIPLEXING=false
 
 
 # Get source
