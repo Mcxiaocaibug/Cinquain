@@ -20,6 +20,12 @@ cd cinquain
 ./install.sh matrix.example.com admin@example.com
 ```
 
+## Documentation / 文档
+
+- [中文小白部署指南](cinquain/docs/GUIDE.zh-CN.md)
+- [English beginner's deployment guide](cinquain/docs/GUIDE.en.md)
+- [Complete deployment and operations reference](cinquain/README.md)
+
 ## Continuwuity core
 
 <!-- ANCHOR: catchphrase -->
