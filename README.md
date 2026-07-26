@@ -9,15 +9,21 @@
 > automatic HTTPS, secure first-user onboarding, backups, upgrades, health
 > checks, and a protected deployment panel.
 
-Fresh Debian/Ubuntu or Fedora/RHEL server:
+Fresh Debian/Ubuntu or Fedora/RHEL server — one command, no browser step:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh \
+  | sudo sh -s -- matrix.example.com admin@example.com
 ```
 
-The bootstrap command installs the required runtime and prints an SSH tunnel
-plus a one-time panel URL. See the complete [Cinquain deployment guide](cinquain/README.md),
-or deploy from an existing checkout with:
+This installs the runtime, verifies the release bundle against its published
+checksum, checks DNS and ports 80/443, obtains a certificate, waits until the
+homeserver is healthy, and prints the single-use token for the first admin
+account. Omit the domain and email to configure it from the protected web panel
+instead, which is installed either way.
+
+See the complete [Cinquain deployment guide](cinquain/README.md), or deploy from
+an existing checkout with:
 
 ```bash
 cd cinquain

@@ -17,6 +17,9 @@ commit `4001b99261a81ad41adcb691b3e89b3a2eb9639c` (2026-07-11).
 ## What is automated
 
 - Docker Engine and Compose v2 installation on supported Linux distributions
+- single-command unattended deployment from domain + email, with no browser step
+- checksum-verified download of the published deployment bundle
+- pre-deployment DNS resolution and port 80/443 conflict detection
 - token-protected web deployment panel, bound to `127.0.0.1` by default
 - validated, atomic `.env` and `continuwuity.toml` generation
 - immutable Matrix `server_name` guard
@@ -40,9 +43,37 @@ commit `4001b99261a81ad41adcb691b3e89b3a2eb9639c` (2026-07-11).
 The Matrix domain becomes part of every user ID and room ID. It cannot be
 changed later without starting with a new database.
 
-## Recommended: fresh-server web deployment
+## Recommended: single-command unattended deployment
 
-Run this once over SSH:
+Pass the Matrix domain and operator email and the whole deployment runs without
+further interaction — dependencies, configuration, TLS, health gate and the
+first-admin token:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh \
+  | sudo sh -s -- matrix.example.com admin@example.com
+```
+
+Environment variables work too, which is easier to template from configuration
+management:
+
+```bash
+curl -fsSL .../bootstrap.sh \
+  | sudo CINQUAIN_DOMAIN=matrix.example.com CINQUAIN_EMAIL=admin@example.com sh
+```
+
+Before touching anything the deployment aborts with a specific reason if the
+domain does not resolve, or if another process already holds port 80/443. On
+success it prints the single-use registration token for the first account, which
+automatically becomes the server administrator.
+
+The ops panel is installed either way, so `ssh -L` access remains available for
+later upgrades, backups and diagnostics.
+
+## Alternative: guided web deployment
+
+Omit the domain and email to only install the panel and configure the server in a
+browser:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
