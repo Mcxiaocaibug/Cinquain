@@ -9,7 +9,7 @@ export ROOT_DIR
 
 usage() {
     cat <<'EOF'
-Cinquain 0.0.1 — 开箱即用的 Matrix homeserver
+Cinquain 0.0.2 — 开箱即用的 Matrix homeserver
 
 用法:
   ./cinquain panel                         启动受令牌保护的部署面板

@@ -51,7 +51,7 @@ There are two ways to continue. Pick one.
 Put your domain and email straight into the command and nothing else is needed:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh \
   | sudo sh -s -- matrix.example.com admin@example.com
 ```
 
@@ -73,7 +73,7 @@ Leave out the domain and email to install only the panel and fill things in from
 browser:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh | sudo sh
 ```
 
 It installs Docker and everything else automatically, then starts a web

@@ -2,7 +2,7 @@
 
 set -eu
 
-VERSION=0.0.1
+VERSION=0.0.2
 REPOSITORY=${CINQUAIN_REPOSITORY:-Mcxiaocaibug/Cinquain}
 RELEASE_TAG=${CINQUAIN_RELEASE_TAG:-cinquain-v$VERSION}
 INSTALL_ROOT=/opt/cinquain

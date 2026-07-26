@@ -5,14 +5,14 @@
 # Cinquain
 
 > Production-ready, web-guided Matrix homeserver deployment built on the latest
-> Continuwuity. Cinquain `0.0.1` keeps the protocol core unmodified and packages
+> Continuwuity. Cinquain `0.0.2` keeps the protocol core unmodified and packages
 > automatic HTTPS, secure first-user onboarding, backups, upgrades, health
 > checks, and a protected deployment panel.
 
 Fresh Debian/Ubuntu or Fedora/RHEL server — one command, no browser step:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh \
   | sudo sh -s -- matrix.example.com admin@example.com
 ```
 

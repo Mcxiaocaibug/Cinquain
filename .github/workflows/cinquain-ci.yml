@@ -55,10 +55,27 @@ jobs:
           # Assert the shape of the version and that every copy of it agrees,
           # rather than pinning a literal that has to be edited on every bump.
           version=$(cat cinquain/VERSION)
+          image="ghcr.io/mcxiaocaibug/cinquain:$version"
           grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' cinquain/VERSION
           grep -qx "CINQUAIN_VERSION=$version" cinquain/.env.example
+          grep -qx "CINQUAIN_HOMESERVER_IMAGE=$image" cinquain/.env.example
           grep -qx "VERSION=$version" cinquain/bootstrap.sh
           grep -q "^## $version " cinquain/CHANGELOG.md
+          grep -q "$image" cinquain/docker-compose.yml
+          grep -q "$image" cinquain/panel/site/index.html
+          grep -q "CinquainPanel/$version" cinquain/panel/server.py
+          grep -q "data-version>$version<" cinquain/panel/site/index.html
+          grep -q "Cinquain $version " cinquain/cinquain
+          grep -q "Cinquain $version<" cinquain/site/index.html
+          grep -qx "# Cinquain $version" cinquain/README.md
+          # The piped-installer URLs must point at the tag being released, or
+          # published docs keep installing the previous version.
+          for doc in README.md cinquain/README.md cinquain/docs/GUIDE.en.md cinquain/docs/GUIDE.zh-CN.md; do
+            if grep -q 'raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v' "$doc"; then
+              ! grep 'raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v' "$doc" \
+                | grep -v "cinquain-v$version/" | grep .
+            fi
+          done
 
   image:
     name: Build release image (${{ matrix.platform }})

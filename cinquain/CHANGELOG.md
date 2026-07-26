@@ -1,6 +1,6 @@
 # Cinquain changelog
 
-## Unreleased
+## 0.0.2 — 2026-07-26
 
 - Rebased on upstream Continuwuity `main` at version `26.6.2` (60 upstream
   commits; the protocol core remains unmodified).

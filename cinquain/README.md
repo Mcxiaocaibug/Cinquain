@@ -1,12 +1,12 @@
-# Cinquain 0.0.1
+# Cinquain 0.0.2
 
 Cinquain turns a fresh Linux VPS into a production-oriented Matrix homeserver.
 It is a deployment and operations layer around an unmodified Continuwuity core,
 so upstream updates remain reviewable and future syncs do not require rebasing a
 private fork of the protocol implementation.
 
-This release is based on Continuwuity `26.6.0` plus upstream `main` through
-commit `4001b99261a81ad41adcb691b3e89b3a2eb9639c` (2026-07-11).
+This release is based on Continuwuity `26.6.2` plus upstream `main` through
+commit `8cde2ad0cc3023fa23a3465b20cd4aeefccbe35a` (2026-07-25).
 
 ## Documentation index
 
@@ -50,7 +50,7 @@ further interaction — dependencies, configuration, TLS, health gate and the
 first-admin token:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh \
   | sudo sh -s -- matrix.example.com admin@example.com
 ```
 
@@ -76,7 +76,7 @@ Omit the domain and email to only install the panel and configure the server in 
 browser:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh | sudo sh
 ```
 
 The script prints a command similar to:
@@ -162,8 +162,8 @@ repository's `cinquain/` directory for a checkout installation.
 ./cinquain logs homeserver
 ./cinquain token
 ./cinquain backup
-./cinquain restore backups/cinquain-v0.0.1-YYYYMMDDTHHMMSSZ.tar.gz
-./cinquain upgrade ghcr.io/mcxiaocaibug/cinquain:0.0.2
+./cinquain restore backups/cinquain-v0.0.2-YYYYMMDDTHHMMSSZ.tar.gz
+./cinquain upgrade ghcr.io/mcxiaocaibug/cinquain:0.0.3
 ```
 
 Backups briefly stop only the homeserver container so RocksDB and media are
@@ -203,7 +203,7 @@ the Compose/Caddy models and builds the exact multi-architecture release image.
 
 ## Scope and limitations
 
-- `0.0.1` targets a single server and a single Matrix domain.
+- `0.0.2` targets a single server and a single Matrix domain.
 - SMTP, OIDC, bridges, MatrixRTC/LiveKit and TURN depend on operator-specific
   providers and credentials, so they are not silently enabled with insecure
   defaults. Add them using the upstream Continuwuity guides after base deployment.

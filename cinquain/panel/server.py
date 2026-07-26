@@ -160,7 +160,7 @@ def first_registration_token() -> str | None:
 
 
 class PanelHandler(BaseHTTPRequestHandler):
-    server_version = "CinquainPanel/0.0.1"
+    server_version = "CinquainPanel/0.0.2"
 
     def log_message(self, fmt: str, *args: object) -> None:
         # Never log a query string: operators may arrive with a legacy query token.

@@ -47,7 +47,7 @@ ssh root@你的服务器IP
 把域名和你的邮箱直接写在命令里，全程无需再操作：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh \
   | sudo sh -s -- matrix.example.com admin@example.com
 ```
 
@@ -65,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0
 不写域名和邮箱，就只安装面板，在浏览器里填写：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh | sudo sh
 ```
 
 它会自动安装 Docker 等所有依赖，并启动一个**只有你能访问**的网页部署面板。
