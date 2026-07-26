@@ -9,11 +9,27 @@ INSTALL_ROOT=/opt/cinquain
 PANEL_BIND=${CINQUAIN_PANEL_BIND:-127.0.0.1}
 PANEL_PORT=${CINQUAIN_PANEL_PORT:-7080}
 SOURCE_DIR=${CINQUAIN_SOURCE_DIR:-}
+EXPECTED_SHA256=${CINQUAIN_SHA256:-}
+
+# Supplying both a domain and an operator email turns bootstrap into a complete
+# unattended deployment; without them it only installs the panel and hands the
+# operator a one-time URL.
+#   curl -fsSL .../bootstrap.sh | sudo sh -s -- matrix.example.com admin@example.com
+#   curl -fsSL .../bootstrap.sh | sudo CINQUAIN_DOMAIN=... CINQUAIN_EMAIL=... sh
+DOMAIN=${CINQUAIN_DOMAIN:-${1:-}}
+EMAIL=${CINQUAIN_EMAIL:-${2:-}}
 
 die() { echo "错误: $*" >&2; exit 1; }
 info() { printf '\n==> %s\n' "$*"; }
 
 [ "$(id -u)" -eq 0 ] || die "bootstrap.sh 必须以 root 运行：curl ... | sudo sh"
+
+if [ -n "$DOMAIN" ] && [ -z "$EMAIL" ]; then
+    die "提供域名时必须同时提供管理员邮箱（用于 Let's Encrypt 到期通知）。"
+fi
+if [ -z "$DOMAIN" ] && [ -n "$EMAIL" ]; then
+    die "提供邮箱时必须同时提供 Matrix 域名。"
+fi
 
 case "$PANEL_PORT" in
     ''|*[!0-9]*) die "CINQUAIN_PANEL_PORT 必须是数字。" ;;
@@ -68,18 +84,67 @@ trap cleanup EXIT INT TERM
 
 info "安装 Cinquain $VERSION 到 $INSTALL_ROOT"
 mkdir -p "$INSTALL_ROOT"
+# `set -e` does not react to a failure in any but the last command of a pipeline,
+# and POSIX sh has no pipefail, so stage the copy through a file instead of
+# piping tar into tar.
+copy_tree() {
+    tar -C "$1" -cf "$tmp_dir/payload.tar" .
+    tar -C "$2" -xf "$tmp_dir/payload.tar"
+    rm -f "$tmp_dir/payload.tar"
+}
+
 if [ -n "$SOURCE_DIR" ]; then
     [ -d "$SOURCE_DIR/cinquain" ] || die "CINQUAIN_SOURCE_DIR 必须指向 Cinquain 仓库根目录。"
-    tar -C "$SOURCE_DIR/cinquain" -cf - . | tar -C "$INSTALL_ROOT" -xf -
+    copy_tree "$SOURCE_DIR/cinquain" "$INSTALL_ROOT"
 else
+    fetch() {
+        curl --fail --location --proto '=https' --tlsv1.2 --retry 4 --retry-all-errors "$1" -o "$2"
+    }
+    sha256_of() {
+        if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$1" | awk '{print $1}'
+        else
+            shasum -a 256 "$1" | awk '{print $1}'
+        fi
+    }
+
     archive="$tmp_dir/cinquain.tar.gz"
-    url="https://github.com/$REPOSITORY/archive/refs/tags/$RELEASE_TAG.tar.gz"
-    curl --fail --location --proto '=https' --tlsv1.2 --retry 4 --retry-all-errors "$url" -o "$archive"
-    top=$(tar -tzf "$archive" | sed -n '1s#/.*##p')
-    [ -n "$top" ] || die "无法识别发布归档。"
+    release_base="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG"
+    # Prefer the published deployment bundle: the release workflow ships it with a
+    # .sha256 sidecar, so `curl | sudo sh` can verify what it is about to install
+    # without the operator supplying anything. GitHub's auto-generated source
+    # tarball has no checksum and is not byte-stable, so it is only the fallback.
+    if fetch "$release_base/cinquain-$VERSION.tar.gz" "$archive" 2>/dev/null; then
+        expected=$EXPECTED_SHA256
+        if [ -z "$expected" ] && fetch "$release_base/cinquain-$VERSION.tar.gz.sha256" "$archive.sha256" 2>/dev/null; then
+            expected=$(awk '{print $1}' "$archive.sha256")
+        fi
+        if [ -n "$expected" ]; then
+            actual=$(sha256_of "$archive")
+            [ "$actual" = "$expected" ] \
+                || die "发布归档校验和不匹配（期望 $expected，实际 $actual）。"
+            info "发布归档校验和匹配"
+        else
+            echo "警告: 未能获取校验文件，跳过完整性校验。" >&2
+        fi
+        top=cinquain
+    else
+        info "未找到发布产物，回退到源码归档"
+        fetch "https://github.com/$REPOSITORY/archive/refs/tags/$RELEASE_TAG.tar.gz" "$archive"
+        if [ -n "$EXPECTED_SHA256" ]; then
+            actual=$(sha256_of "$archive")
+            [ "$actual" = "$EXPECTED_SHA256" ] \
+                || die "源码归档校验和不匹配（期望 $EXPECTED_SHA256，实际 $actual）。"
+            info "源码归档校验和匹配"
+        fi
+        top=$(tar -tzf "$archive" | sed -n '1s#/.*##p')
+        [ -n "$top" ] || die "无法识别发布归档。"
+        top="$top/cinquain"
+    fi
+
     tar -xzf "$archive" -C "$tmp_dir"
-    [ -d "$tmp_dir/$top/cinquain" ] || die "发布归档缺少 cinquain 目录。"
-    tar -C "$tmp_dir/$top/cinquain" -cf - . | tar -C "$INSTALL_ROOT" -xf -
+    [ -d "$tmp_dir/$top" ] || die "归档缺少 cinquain 目录。"
+    copy_tree "$tmp_dir/$top" "$INSTALL_ROOT"
 fi
 
 find "$INSTALL_ROOT" -type f -name '*.sh' -exec chmod 755 {} \;
@@ -102,12 +167,31 @@ install -m 0644 "$INSTALL_ROOT/systemd/cinquain-panel.service" /etc/systemd/syst
 systemctl daemon-reload
 systemctl enable --now cinquain-panel.service
 
-info "Cinquain 网页面板已就绪"
-if [ "$PANEL_BIND" = "0.0.0.0" ]; then
-    echo "警告: 面板正在公网监听。请通过防火墙限制 $PANEL_PORT/tcp，并在部署后改回 127.0.0.1。"
-    echo "打开: http://<服务器IP>:$PANEL_PORT/#token=$panel_token"
+panel_url_hint() {
+    if [ "$PANEL_BIND" = "0.0.0.0" ]; then
+        echo "警告: 面板正在公网监听。请通过防火墙限制 $PANEL_PORT/tcp，并在部署后改回 127.0.0.1。"
+        echo "运维面板: http://<服务器IP>:$PANEL_PORT/#token=$panel_token"
+    else
+        echo "运维面板: 先在你的电脑上执行"
+        echo "          ssh -N -L $PANEL_PORT:127.0.0.1:$PANEL_PORT <root@服务器IP>"
+        echo "          再打开 http://127.0.0.1:$PANEL_PORT/#token=$panel_token"
+    fi
+    echo "令牌保存在 $panel_env（权限 0600）。"
+}
+
+if [ -n "$DOMAIN" ]; then
+    info "开始全自动部署 $DOMAIN"
+    # cinquain deploy validates the domain/email, checks DNS and 80/443, writes the
+    # configuration, starts the stack, waits for TLS and prints the first-account
+    # token. Any failure aborts here with a specific reason.
+    "$INSTALL_ROOT/cinquain" deploy "$DOMAIN" "$EMAIL"
+    echo
+    info "Cinquain $VERSION 部署完成"
+    panel_url_hint
 else
-    echo "在你的电脑上执行: ssh -N -L $PANEL_PORT:127.0.0.1:$PANEL_PORT <root@服务器IP>"
-    echo "然后打开: http://127.0.0.1:$PANEL_PORT/#token=$panel_token"
+    info "Cinquain 网页面板已就绪"
+    echo "尚未部署 homeserver。可在面板中完成，或直接执行:"
+    echo "  $INSTALL_ROOT/cinquain deploy <Matrix域名> <管理员邮箱>"
+    echo
+    panel_url_hint
 fi
-echo "令牌保存在 $panel_env（权限 0600）。"
