@@ -15,8 +15,16 @@ require_config
 require_docker
 require_tool curl
 
+https_port=${CINQUAIN_HTTPS_PORT:-443}
+if [ "$https_port" = "443" ]; then
+    base="https://$CINQUAIN_SERVER_NAME"
+else
+    base="https://$CINQUAIN_SERVER_NAME:$https_port"
+fi
+
 check_once() {
     failures=0
+    loopback=0
     running=$(compose ps --status running --services 2>/dev/null || true)
     for service in homeserver caddy; do
         if printf '%s\n' "$running" | grep -qx "$service"; then
@@ -27,7 +35,6 @@ check_once() {
         fi
     done
 
-    base="https://$CINQUAIN_SERVER_NAME"
     check_url() {
         label=$1
         path=$2
@@ -36,10 +43,22 @@ check_once() {
         if body=$(curl --silent --show-error --fail --max-time 15 "$base$path" 2>/dev/null) && \
             printf '%s' "$body" | grep -q "$pattern"; then
             echo "OK"
-        else
-            echo "FAILED"
-            failures=$((failures + 1))
+            return 0
         fi
+        # Plenty of hosts cannot reach their own public address because the
+        # network provides no NAT hairpin. Retry against the local Caddy using the
+        # real SNI so the certificate still verifies; that proves the stack serves
+        # correctly even when the round trip through the internet is untestable
+        # from here.
+        if body=$(curl --silent --show-error --fail --max-time 15 \
+            --resolve "$CINQUAIN_SERVER_NAME:$https_port:127.0.0.1" "$base$path" 2>/dev/null) && \
+            printf '%s' "$body" | grep -q "$pattern"; then
+            echo "OK (本机回环)"
+            loopback=$((loopback + 1))
+            return 0
+        fi
+        echo "FAILED"
+        failures=$((failures + 1))
     }
 
     check_url "Matrix Client API" "/_matrix/client/versions" '"versions"'
@@ -48,6 +67,11 @@ check_once() {
     check_url "Server discovery" "/.well-known/matrix/server" '"m.server"'
     check_url "Support discovery" "/.well-known/matrix/support" '"contacts"'
     check_url "Cinquain landing page" "/" 'Cinquain'
+
+    if [ "$failures" -eq 0 ] && [ "$loopback" -gt 0 ]; then
+        warn "部分检查仅通过本机回环成功。本机无法访问自己的公网地址（缺少 NAT hairpin）时属正常现象，"
+        warn "但请从另一个网络确认 https://$CINQUAIN_SERVER_NAME 可访问，否则联邦通信会失败。"
+    fi
 
     [ "$failures" -eq 0 ]
 }

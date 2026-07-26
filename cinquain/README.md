@@ -1,12 +1,12 @@
-# Cinquain 0.0.1
+# Cinquain 0.0.2
 
 Cinquain turns a fresh Linux VPS into a production-oriented Matrix homeserver.
 It is a deployment and operations layer around an unmodified Continuwuity core,
 so upstream updates remain reviewable and future syncs do not require rebasing a
 private fork of the protocol implementation.
 
-This release is based on Continuwuity `26.6.0` plus upstream `main` through
-commit `4001b99261a81ad41adcb691b3e89b3a2eb9639c` (2026-07-11).
+This release is based on Continuwuity `26.6.2` plus upstream `main` through
+commit `8cde2ad0cc3023fa23a3465b20cd4aeefccbe35a` (2026-07-25).
 
 ## Documentation index
 
@@ -17,6 +17,9 @@ commit `4001b99261a81ad41adcb691b3e89b3a2eb9639c` (2026-07-11).
 ## What is automated
 
 - Docker Engine and Compose v2 installation on supported Linux distributions
+- single-command unattended deployment from domain + email, with no browser step
+- checksum-verified download of the published deployment bundle
+- pre-deployment DNS resolution and port 80/443 conflict detection
 - token-protected web deployment panel, bound to `127.0.0.1` by default
 - validated, atomic `.env` and `continuwuity.toml` generation
 - immutable Matrix `server_name` guard
@@ -40,12 +43,40 @@ commit `4001b99261a81ad41adcb691b3e89b3a2eb9639c` (2026-07-11).
 The Matrix domain becomes part of every user ID and room ID. It cannot be
 changed later without starting with a new database.
 
-## Recommended: fresh-server web deployment
+## Recommended: single-command unattended deployment
 
-Run this once over SSH:
+Pass the Matrix domain and operator email and the whole deployment runs without
+further interaction — dependencies, configuration, TLS, health gate and the
+first-admin token:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh \
+  | sudo sh -s -- matrix.example.com admin@example.com
+```
+
+Environment variables work too, which is easier to template from configuration
+management:
+
+```bash
+curl -fsSL .../bootstrap.sh \
+  | sudo CINQUAIN_DOMAIN=matrix.example.com CINQUAIN_EMAIL=admin@example.com sh
+```
+
+Before touching anything the deployment aborts with a specific reason if the
+domain does not resolve, or if another process already holds port 80/443. On
+success it prints the single-use registration token for the first account, which
+automatically becomes the server administrator.
+
+The ops panel is installed either way, so `ssh -L` access remains available for
+later upgrades, backups and diagnostics.
+
+## Alternative: guided web deployment
+
+Omit the domain and email to only install the panel and configure the server in a
+browser:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh | sudo sh
 ```
 
 The script prints a command similar to:
@@ -131,8 +162,8 @@ repository's `cinquain/` directory for a checkout installation.
 ./cinquain logs homeserver
 ./cinquain token
 ./cinquain backup
-./cinquain restore backups/cinquain-v0.0.1-YYYYMMDDTHHMMSSZ.tar.gz
-./cinquain upgrade ghcr.io/mcxiaocaibug/cinquain:0.0.2
+./cinquain restore backups/cinquain-v0.0.2-YYYYMMDDTHHMMSSZ.tar.gz
+./cinquain upgrade ghcr.io/mcxiaocaibug/cinquain:0.0.3
 ```
 
 Backups briefly stop only the homeserver container so RocksDB and media are
@@ -172,7 +203,7 @@ the Compose/Caddy models and builds the exact multi-architecture release image.
 
 ## Scope and limitations
 
-- `0.0.1` targets a single server and a single Matrix domain.
+- `0.0.2` targets a single server and a single Matrix domain.
 - SMTP, OIDC, bridges, MatrixRTC/LiveKit and TURN depend on operator-specific
   providers and credentials, so they are not silently enabled with insecure
   defaults. Add them using the upstream Continuwuity guides after base deployment.

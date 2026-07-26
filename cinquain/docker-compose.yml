@@ -2,7 +2,7 @@ name: ${CINQUAIN_STACK_NAME:-cinquain}
 
 services:
   homeserver:
-    image: ${CINQUAIN_HOMESERVER_IMAGE:-ghcr.io/mcxiaocaibug/cinquain:0.0.1}
+    image: ${CINQUAIN_HOMESERVER_IMAGE:-ghcr.io/mcxiaocaibug/cinquain:0.0.2}
     pull_policy: missing
     command: /sbin/conduwuit
     restart: unless-stopped

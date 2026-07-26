@@ -1,15 +1,14 @@
 use axum::extract::State;
-use axum_client_ip::ClientIp;
-use conduwuit::{Err, Result, debug, err, utils};
+use conduwuit::{Err, Result, debug, err};
 use futures::StreamExt;
 use ruma::{
-	MilliSecondsSinceUnixEpoch, OwnedDeviceId,
+	MilliSecondsSinceUnixEpoch,
 	api::client::device::{
 		self, delete_device, delete_devices, get_device, get_devices, update_device,
 	},
 };
 
-use crate::{Ruma, client::DEVICE_ID_LENGTH};
+use crate::{Ruma, client_ip::ClientIp};
 
 /// # `GET /_matrix/client/r0/devices`
 ///
@@ -46,10 +45,10 @@ pub(crate) async fn get_device_route(
 /// # `PUT /_matrix/client/r0/devices/{deviceId}`
 ///
 /// Updates the metadata on a given device of the sender user.
-#[tracing::instrument(skip_all, fields(%client), name = "update_device", level = "debug")]
+#[tracing::instrument(skip_all, name = "update_device", level = "debug")]
 pub(crate) async fn update_device_route(
 	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
+	ClientIp(client): ClientIp, // NOTE: Required for updating device metadata
 	body: Ruma<update_device::v3::Request>,
 ) -> Result<update_device::v3::Response> {
 	let sender_user = body.identity.expect_sender_user()?;
@@ -85,16 +84,13 @@ pub(crate) async fn update_device_route(
 				appservice.registration.id
 			);
 
-			let device_id = OwnedDeviceId::from(utils::random_string(DEVICE_ID_LENGTH));
-
 			services
 				.users
 				.create_device(
 					sender_user,
-					&device_id,
-					&appservice.registration.as_token,
+					&body.device_id,
 					None,
-					None,
+					body.display_name.clone(),
 					Some(client.to_string()),
 				)
 				.await?;

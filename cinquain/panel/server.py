@@ -149,7 +149,9 @@ def first_registration_token() -> str | None:
             cwd=ROOT,
             capture_output=True,
             text=True,
-            timeout=15,
+            # Reads the whole homeserver log, since the first-run banner is printed
+            # at startup and cannot be found by tailing.
+            timeout=45,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -158,11 +160,17 @@ def first_registration_token() -> str | None:
 
 
 class PanelHandler(BaseHTTPRequestHandler):
-    server_version = "CinquainPanel/0.0.1"
+    server_version = "CinquainPanel/0.0.2"
 
     def log_message(self, fmt: str, *args: object) -> None:
-        # Never log URLs: operators may arrive with a legacy query token.
-        print(f"{self.client_address[0]} - {fmt % args}".replace(self.path, "[path]"), file=sys.stderr)
+        # Never log a query string: operators may arrive with a legacy query token.
+        # Redacting the whole path instead would corrupt every message, because a
+        # path of "/" turns each separator in the request line into a redaction.
+        message = fmt % args
+        split = urlsplit(self.path)
+        if split.query or split.fragment:
+            message = message.replace(self.path, f"{split.path}?[redacted]", 1)
+        print(f"{self.client_address[0]} - {message}", file=sys.stderr)
 
     def end_headers(self) -> None:
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -284,9 +292,12 @@ class PanelHandler(BaseHTTPRequestHandler):
                     image = str(payload.get("image", "")).strip()
                     command = [str(ROOT / "cinquain"), "upgrade"]
                     if image:
+                        # Must read this deployment's .env (CINQUAIN_ROOT), not the
+                        # one next to the config module.
+                        env = read_env(ROOT / ".env")
                         DeploymentConfig.validated(
-                            domain=read_env().get("CINQUAIN_SERVER_NAME", "matrix.invalid"),
-                            email=read_env().get("CINQUAIN_OPERATOR_EMAIL", "invalid@example.com"),
+                            domain=env.get("CINQUAIN_SERVER_NAME", "matrix.invalid"),
+                            email=env.get("CINQUAIN_OPERATOR_EMAIL", "invalid@example.com"),
                             image=image,
                         )
                         command.append(image)

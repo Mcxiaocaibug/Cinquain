@@ -14,6 +14,7 @@ use conduwuit::{
 	utils::{self},
 };
 use database::Map;
+pub use device::DeviceToken;
 pub use profile::ProfileFieldChange;
 use ruma::{UserId, api::error::ErrorKind, encryption::CrossSigningKey, serde::Raw};
 use serde::{Deserialize, Serialize};
@@ -108,7 +109,7 @@ impl crate::Service for Service {
 			services: Services {
 				account_data: args.depend::<account_data::Service>("account_data"),
 				admin: args.depend::<admin::Service>("admin"),
-				alias: args.depend::<alias::Service>("alias"),
+				alias: args.depend::<alias::Service>("rooms::alias"),
 				appservice: args.depend::<appservice::Service>("appservice"),
 				config: args.depend::<config::Service>("config"),
 				firstrun: args.depend::<firstrun::Service>("firstrun"),

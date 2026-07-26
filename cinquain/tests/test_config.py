@@ -42,7 +42,9 @@ class ConfigTests(unittest.TestCase):
             config.write_config(deployment, root)
             env_text = (root / ".env").read_text(encoding="utf-8")
             toml_text = (root / "continuwuity.toml").read_text(encoding="utf-8")
-            self.assertIn("CINQUAIN_VERSION=0.0.1", env_text)
+            # Derived, not literal: a hardcoded version here fails the suite on
+            # every release bump without testing anything extra.
+            self.assertIn(f"CINQUAIN_VERSION={config.VERSION}", env_text)
             self.assertIn("server_name = \"matrix.example.org\"", toml_text)
             self.assertEqual(stat.S_IMODE(os.stat(root / ".env").st_mode), 0o600)
             self.assertEqual(stat.S_IMODE(os.stat(root / "continuwuity.toml").st_mode), 0o600)

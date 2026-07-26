@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests;
 use axum::extract::State;
-use axum_client_ip::ClientIp;
 use conduwuit::{
 	Err, Result, err,
 	matrix::{Event, pdu::PartialPdu},
@@ -28,14 +27,14 @@ use ruma::{
 };
 use serde_json::{json, value::to_raw_value};
 
-use crate::{Ruma, RumaResponse};
+use crate::{Ruma, RumaResponse, client_ip::ClientIp};
 
 /// # `PUT /_matrix/client/*/rooms/{roomId}/state/{eventType}/{stateKey}`
 ///
 /// Sends a state event into the room.
 pub(crate) async fn send_state_event_for_key_route(
 	State(services): State<crate::State>,
-	ClientIp(ip): ClientIp,
+	ClientIp(ip): ClientIp, // NOTE: Required for updating device metadata
 	body: Ruma<send_state_event::v3::Request>,
 ) -> Result<send_state_event::v3::Response> {
 	let sender_user = body.identity.expect_sender_user()?;
@@ -72,7 +71,7 @@ pub(crate) async fn send_state_event_for_key_route(
 /// Sends a state event into the room.
 pub(crate) async fn send_state_event_for_empty_key_route(
 	State(services): State<crate::State>,
-	ClientIp(ip): ClientIp,
+	ClientIp(ip): ClientIp, // NOTE: Required for updating device metadata
 	body: Ruma<send_state_event::v3::Request>,
 ) -> Result<RumaResponse<send_state_event::v3::Response>> {
 	send_state_event_for_key_route(State(services), ClientIp(ip), body)

@@ -44,10 +44,36 @@ PowerShell):
 ssh root@YOUR_SERVER_IP
 ```
 
-Then paste and run this single command:
+There are two ways to continue. Pick one.
+
+### Option 1 (simplest): one command, fully unattended
+
+Put your domain and email straight into the command and nothing else is needed:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh \
+  | sudo sh -s -- matrix.example.com admin@example.com
+```
+
+Replace `matrix.example.com` with your Matrix domain and `admin@example.com` with
+your email (used for certificate expiry notices).
+
+It installs the dependencies, checks DNS and ports, obtains the HTTPS
+certificate, starts the services, and finally prints the **first registration
+token**. Once you see the token you are done — skip ahead to "Create your
+account".
+
+If the domain does not point at this server yet, or another program already holds
+port 80/443, the command stops immediately and tells you exactly why, instead of
+failing at the very end.
+
+### Option 2: step-by-step in the web panel
+
+Leave out the domain and email to install only the panel and fill things in from a
+browser:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh | sudo sh
 ```
 
 It installs Docker and everything else automatically, then starts a web

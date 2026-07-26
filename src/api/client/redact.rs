@@ -1,11 +1,10 @@
 use axum::extract::State;
-use axum_client_ip::ClientIp;
 use conduwuit::{Err, Result, matrix::pdu::PartialPdu};
 use ruma::{
 	api::client::redact::redact_event, assign, events::room::redaction::RoomRedactionEventContent,
 };
 
-use crate::Ruma;
+use crate::{Ruma, client_ip::ClientIp};
 
 /// # `PUT /_matrix/client/r0/rooms/{roomId}/redact/{eventId}/{txnId}`
 ///
@@ -14,7 +13,7 @@ use crate::Ruma;
 /// - TODO: Handle txn id
 pub(crate) async fn redact_event_route(
 	State(services): State<crate::State>,
-	ClientIp(client_ip): ClientIp,
+	ClientIp(client_ip): ClientIp, // NOTE: required for updating device metadata
 	body: Ruma<redact_event::v3::Request>,
 ) -> Result<redact_event::v3::Response> {
 	let sender_user = body.identity.expect_sender_user()?;

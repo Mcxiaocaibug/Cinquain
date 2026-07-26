@@ -4,9 +4,13 @@ set -eu
 ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "$ROOT_DIR/.." && pwd)
 failures=0
+skipped=0
 
 pass() { printf '%-44s OK\n' "$1"; }
 fail() { printf '%-44s FAILED\n' "$1"; failures=$((failures + 1)); }
+# Always announce a skip: a silently omitted check makes a green preflight look
+# like far more coverage than it actually had.
+skip() { printf '%-44s SKIPPED (%s)\n' "$1" "$2"; skipped=$((skipped + 1)); }
 
 for file in \
     VERSION .env.example docker-compose.yml Caddyfile continuwuity-resolv.conf \
@@ -30,6 +34,8 @@ if sh "$ROOT_DIR/tests/install-smoke.sh"; then pass "installer smoke test"; else
 
 if command -v node >/dev/null 2>&1; then
     if node "$ROOT_DIR/tests/panel-ui.mjs"; then pass "panel UI tests"; else fail "panel UI tests"; fi
+else
+    skip "panel UI tests" "Node unavailable"
 fi
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
@@ -45,7 +51,7 @@ elif command -v docker-compose >/dev/null 2>&1; then
         fail "Docker Compose model"
     fi
 else
-    echo "Docker Compose model                         SKIPPED (Docker unavailable)"
+    skip "Docker Compose model" "Docker unavailable"
 fi
 
 if command -v caddy >/dev/null 2>&1; then
@@ -55,6 +61,8 @@ if command -v caddy >/dev/null 2>&1; then
     else
         fail "Caddy production configuration"
     fi
+else
+    skip "Caddy production configuration" "caddy unavailable"
 fi
 
 if grep -R -nE 'CINQUAIN_PANEL_BIND:-0\.0\.0\.0|CINQUAIN_PANEL_TOKEN=[A-Za-z0-9]' "$ROOT_DIR" --exclude=preflight.sh >/dev/null 2>&1; then
@@ -75,9 +83,15 @@ if command -v shellcheck >/dev/null 2>&1; then
     else
         fail "ShellCheck"
     fi
+else
+    skip "ShellCheck" "shellcheck unavailable"
 fi
 
 if (cd "$REPO_ROOT" && git diff --check); then pass "git whitespace check"; else fail "git whitespace check"; fi
 
 [ "$failures" -eq 0 ] || { echo "Cinquain preflight: $failures 项失败" >&2; exit 1; }
-echo "Cinquain preflight 全部通过。"
+if [ "$skipped" -gt 0 ]; then
+    echo "Cinquain preflight 通过，但有 $skipped 项被跳过（缺少对应工具，本机覆盖率低于 CI）。"
+else
+    echo "Cinquain preflight 全部通过。"
+fi

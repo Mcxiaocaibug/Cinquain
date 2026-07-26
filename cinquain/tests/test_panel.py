@@ -81,7 +81,7 @@ class PanelTests(unittest.TestCase):
         body = {
             "domain": "matrix.example.org",
             "email": "ops@example.org",
-            "image": "ghcr.io/mcxiaocaibug/cinquain:0.0.1",
+            "image": panel.DEFAULT_IMAGE,
             "timezone": "Asia/Shanghai",
         }
         with self.request("/api/deploy", method="POST", body=body) as response:

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use axum::extract::State;
-use axum_client_ip::ClientIp;
 use conduwuit::{
 	Err, Result, debug_info, info,
 	utils::{self},
@@ -20,10 +19,13 @@ use ruma::{
 	assign,
 };
 use serde_json::value::RawValue;
-use service::{mailer::messages, users::HashedPassword};
+use service::{
+	mailer::messages,
+	users::{DeviceToken, HashedPassword},
+};
 
-use super::{DEVICE_ID_LENGTH, TOKEN_LENGTH};
-use crate::Ruma;
+use super::DEVICE_ID_LENGTH;
+use crate::{Ruma, client_ip::ClientIp};
 
 /// # `POST /_matrix/client/v3/register`
 ///
@@ -33,10 +35,10 @@ use crate::Ruma;
 /// /_matrix/client/v3/register/available`](fn.get_register_available_route.
 /// html) to check if the user id is valid and available.
 #[allow(clippy::doc_markdown)]
-#[tracing::instrument(skip_all, fields(%client), name = "register", level = "info")]
+#[tracing::instrument(skip_all, name = "register", level = "info")]
 pub(crate) async fn register_route(
 	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
+	ClientIp(client): ClientIp, // NOTE: Required for metadata.
 	body: Ruma<register::v3::Request>,
 ) -> Result<register::v3::Response> {
 	if body.kind != RegistrationKind::User {
@@ -119,7 +121,7 @@ pub(crate) async fn register_route(
 			.unwrap_or_else(|| utils::random_string(DEVICE_ID_LENGTH).into());
 
 		// Generate new token for the device
-		let new_token = utils::random_string(TOKEN_LENGTH);
+		let new_token = DeviceToken::new_random();
 
 		// Create device for this account
 		services
@@ -127,8 +129,7 @@ pub(crate) async fn register_route(
 			.create_device(
 				&user_id,
 				&device_id,
-				&new_token,
-				None,
+				Some(new_token.clone()),
 				body.initial_device_display_name.clone(),
 				Some(client.to_string()),
 			)
@@ -142,7 +143,7 @@ pub(crate) async fn register_route(
 	debug_info!(%user_id, ?device, "New account created via legacy registration");
 
 	Ok(assign!(register::v3::Response::new(user_id), {
-		access_token: token,
+		access_token: token.map(DeviceToken::into_token),
 		device_id: device,
 		refresh_token: None,
 		expires_in: None,

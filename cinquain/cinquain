@@ -9,7 +9,7 @@ export ROOT_DIR
 
 usage() {
     cat <<'EOF'
-Cinquain 0.0.1 — 开箱即用的 Matrix homeserver
+Cinquain 0.0.2 — 开箱即用的 Matrix homeserver
 
 用法:
   ./cinquain panel                         启动受令牌保护的部署面板
@@ -26,7 +26,63 @@ Cinquain 0.0.1 — 开箱即用的 Matrix homeserver
 EOF
 }
 
+# Catch the two failures that account for almost every broken first deployment:
+# a domain that does not resolve yet (ACME will never succeed) and a foreign
+# process already holding 80/443 (Caddy cannot bind).
+predeploy_checks() {
+    info "部署前环境检查"
+
+    if [ "${CINQUAIN_SKIP_DNS_CHECK:-0}" = "1" ]; then
+        printf '%-32s %s\n' "DNS 解析 $CINQUAIN_SERVER_NAME" "SKIPPED"
+    elif resolved=$(resolve_host "$CINQUAIN_SERVER_NAME"); then
+        printf '%-32s %s\n' "DNS 解析 $CINQUAIN_SERVER_NAME" "OK"
+        locals=$(local_addresses || true)
+        matched=0
+        while IFS= read -r address; do
+            [ -n "$address" ] || continue
+            if printf '%s\n' "$locals" | grep -qxF "$address"; then
+                matched=1
+            fi
+        done <<EOF
+$resolved
+EOF
+        if [ "$matched" -eq 0 ]; then
+            warn "$CINQUAIN_SERVER_NAME 解析到 $(printf '%s' "$resolved" | tr '\n' ' ')，与本机地址均不匹配。"
+            warn "本机位于 NAT / 负载均衡 / 云厂商弹性 IP 之后时这是正常的；否则 Let's Encrypt 将无法签发证书。"
+        fi
+    else
+        die "$CINQUAIN_SERVER_NAME 无法解析。请先添加指向本服务器公网 IP 的 DNS A/AAAA 记录，再重新部署。"
+    fi
+
+    http_port=${CINQUAIN_HTTP_PORT:-80}
+    https_port=${CINQUAIN_HTTPS_PORT:-443}
+    if compose ps --status running --services 2>/dev/null | grep -qx caddy; then
+        printf '%-32s %s\n' "端口 $http_port/$https_port" "SKIPPED (Caddy 已在运行)"
+        return 0
+    fi
+    for port in "$http_port" "$https_port"; do
+        if port_listener "$port"; then
+            die "端口 $port 已被其他进程占用，Caddy 将无法绑定。请先停止它（ss -ltnp | grep :$port）。"
+        fi
+    done
+    printf '%-32s %s\n' "端口 $http_port/$https_port" "OK"
+}
+
+pull_images() {
+    info "拉取 Cinquain ${CINQUAIN_VERSION:-0.0.1} 运行镜像"
+    compose pull && return 0
+    # A blocked or flaky registry must not abort a redeploy when the exact images
+    # are already in the local store.
+    for image in "${CINQUAIN_HOMESERVER_IMAGE:-}" "${CINQUAIN_CADDY_IMAGE:-}"; do
+        [ -n "$image" ] || continue
+        docker image inspect "$image" >/dev/null 2>&1 \
+            || die "镜像拉取失败，且本地没有 $image 的副本。请检查网络或配置 registry 镜像源。"
+    done
+    warn "镜像拉取失败，改用本地已有镜像继续部署。"
+}
+
 deploy() {
+    require_tool python3
     if [ "$#" -ge 2 ]; then
         domain=$1
         email=$2
@@ -40,13 +96,12 @@ deploy() {
         die "deploy 需要同时提供域名和邮箱。"
     fi
 
-    require_tool python3
     require_config
     require_docker
+    predeploy_checks
     info "验证 Docker Compose 配置"
     compose config --quiet
-    info "拉取 Cinquain ${CINQUAIN_VERSION:-0.0.1} 运行镜像"
-    compose pull
+    pull_images
     info "启动 homeserver 与自动 HTTPS 入口"
     compose up -d --remove-orphans
     mkdir -p "$ROOT_DIR/state"
@@ -55,7 +110,13 @@ deploy() {
     info "部署完成"
     echo "Homeserver: https://$CINQUAIN_SERVER_NAME"
     echo "账户注册:  https://$CINQUAIN_SERVER_NAME/_continuwuity/account/register/"
-    echo "首次令牌:  ./cinquain token"
+    token=$(compose logs --no-color homeserver 2>&1 | extract_token || true)
+    if [ -n "$token" ]; then
+        echo "首次令牌:  $token"
+        echo "           用它注册第一个账户，该账户将自动获得管理员权限（仅可使用一次）。"
+    else
+        echo "首次令牌:  ./cinquain token   （若管理员账户已创建则不再提供）"
+    fi
 }
 
 panel() {
@@ -76,11 +137,22 @@ panel() {
         exec python3 "$ROOT_DIR/panel/server.py"
 }
 
+# Extract the single-use first-account token from the homeserver banner. The
+# banner is reprinted with a fresh token on every restart while first-run mode is
+# active, so the *last* match is the only valid one. Anchoring on the full
+# "using the registration token X ." phrase keeps the unrelated
+# "registration token configured."/"registration token issued:" log lines out.
+extract_token() {
+    strip_ansi \
+        | sed -n 's/.*using the registration token \([A-Za-z0-9_-][A-Za-z0-9_-]*\) \..*/\1/p' \
+        | tail -n 1
+}
+
 show_token() {
     require_config
     require_docker
     logs=$(compose logs --no-color homeserver 2>&1 || true)
-    token=$(printf '%s\n' "$logs" | sed -n 's/.*registration token \([A-Za-z0-9_-][A-Za-z0-9_-]*\) .*/\1/p' | tail -n 1)
+    token=$(printf '%s\n' "$logs" | extract_token)
     if [ -z "$token" ]; then
         echo "未发现有效的首次注册令牌；管理员可能已经创建，或 homeserver 尚未就绪。" >&2
         exit 1

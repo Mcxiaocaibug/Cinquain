@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use axum::extract::State;
-use axum_client_ip::ClientIp;
 use conduwuit::{
 	Err, Result, debug, err, info,
 	utils::{self, ReadyExt, stream::BroadbandExt},
@@ -29,18 +28,18 @@ use ruma::{
 	},
 	assign,
 };
+use service::users::DeviceToken;
 
-use super::{DEVICE_ID_LENGTH, TOKEN_LENGTH};
-use crate::Ruma;
+use super::DEVICE_ID_LENGTH;
+use crate::{Ruma, client_ip::ClientIp};
 
 /// # `GET /_matrix/client/v3/login`
 ///
 /// Get the supported login types of this server. One of these should be used as
 /// the `type` field when logging in.
-#[tracing::instrument(skip_all, fields(%client), name = "login", level = "info")]
+#[tracing::instrument(skip_all, name = "login", level = "info")]
 pub(crate) async fn get_login_types_route(
 	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
 	_body: Ruma<get_login_types::v3::Request>,
 ) -> Result<get_login_types::v3::Response> {
 	if !services.config.oauth.compatibility_mode().uiaa_available() {
@@ -114,10 +113,10 @@ pub async fn handle_login(
 /// Note: You can use [`GET
 /// /_matrix/client/r0/login`](fn.get_supported_versions_route.html) to see
 /// supported login types.
-#[tracing::instrument(skip_all, fields(%client), name = "login", level = "info")]
+#[tracing::instrument(skip_all, name = "login", level = "info")]
 pub(crate) async fn login_route(
 	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
+	ClientIp(client): ClientIp, // NOTE: Required for device metadata
 	body: Ruma<login::v3::Request>,
 ) -> Result<login::v3::Response> {
 	if !services.config.oauth.compatibility_mode().uiaa_available() {
@@ -196,8 +195,8 @@ pub(crate) async fn login_route(
 		.clone()
 		.unwrap_or_else(|| utils::random_string(DEVICE_ID_LENGTH).into());
 
-	// Generate a new token for the device (ensuring no collisions)
-	let token = services.users.generate_unique_token().await;
+	// Generate a new token for the device
+	let token = DeviceToken::new_random();
 
 	// Determine if device_id was provided and exists in the db for this user
 	let device_exists = if body.device_id.is_some() {
@@ -213,7 +212,7 @@ pub(crate) async fn login_route(
 	if device_exists {
 		services
 			.users
-			.set_token(&user_id, &device_id, &token, None)
+			.set_token(&user_id, &device_id, token.clone())
 			.await?;
 	} else {
 		services
@@ -221,8 +220,7 @@ pub(crate) async fn login_route(
 			.create_device(
 				&user_id,
 				&device_id,
-				&token,
-				None,
+				Some(token.clone()),
 				body.initial_device_display_name.clone(),
 				Some(client.to_string()),
 			)
@@ -241,7 +239,7 @@ pub(crate) async fn login_route(
 	info!("{user_id} logged in");
 
 	#[allow(deprecated)]
-	Ok(assign!(login::v3::Response::new(user_id, token, device_id), {
+	Ok(assign!(login::v3::Response::new(user_id, token.into_token(), device_id), {
 		well_known: client_discovery_info,
 		expires_in: None,
 		home_server: Some(services.config.server_name.clone()),
@@ -255,10 +253,9 @@ pub(crate) async fn login_route(
 /// to log in with the m.login.token flow.
 ///
 /// <https://spec.matrix.org/v1.13/client-server-api/#post_matrixclientv1loginget_token>
-#[tracing::instrument(skip_all, fields(%client), name = "login_token", level = "info")]
+#[tracing::instrument(skip_all, name = "login_token", level = "info")]
 pub(crate) async fn login_token_route(
 	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
 	body: Ruma<get_login_token::v1::Request>,
 ) -> Result<get_login_token::v1::Response> {
 	if !services.config.login_via_existing_session {
@@ -273,7 +270,7 @@ pub(crate) async fn login_token_route(
 		.authenticate_password(&body.auth, sender_user, body.identity.sender_device(), None)
 		.await?;
 
-	let login_token = utils::random_string(TOKEN_LENGTH);
+	let login_token = DeviceToken::new_random().into_token();
 	let expires_in = services.users.create_login_token(sender_user, &login_token);
 
 	Ok(get_login_token::v1::Response::new(
@@ -291,10 +288,9 @@ pub(crate) async fn login_token_route(
 ///   last seen ts)
 /// - Forgets to-device events
 /// - Triggers device list updates
-#[tracing::instrument(skip_all, fields(%client), name = "logout", level = "info")]
+#[tracing::instrument(skip_all, name = "logout", level = "info")]
 pub(crate) async fn logout_route(
 	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
 	body: Ruma<logout::v3::Request>,
 ) -> Result<logout::v3::Response> {
 	let sender_user = body.identity.expect_sender_user()?;
@@ -339,10 +335,9 @@ pub(crate) async fn logout_route(
 /// Note: This is equivalent to calling [`GET
 /// /_matrix/client/r0/logout`](fn.logout_route.html) from each device of this
 /// user.
-#[tracing::instrument(skip_all, fields(%client), name = "logout", level = "info")]
+#[tracing::instrument(skip_all, name = "logout", level = "info")]
 pub(crate) async fn logout_all_route(
 	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
 	body: Ruma<logout_all::v3::Request>,
 ) -> Result<logout_all::v3::Response> {
 	let sender_user = body.identity.expect_sender_user()?;

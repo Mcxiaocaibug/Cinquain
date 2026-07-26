@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 
 use axum::extract::State;
-use axum_client_ip::ClientIp;
 use conduwuit::{Err, Result, err, matrix::pdu::PartialPdu, utils};
 use ruma::{api::client::message::send_message_event, events::MessageLikeEventType};
 use serde_json::from_str;
 
-use crate::Ruma;
+use crate::{Ruma, client_ip::ClientIp};
 
 /// # `PUT /_matrix/client/v3/rooms/{roomId}/send/{eventType}/{txnId}`
 ///
@@ -19,7 +18,7 @@ use crate::Ruma;
 ///   allowed
 pub(crate) async fn send_message_event_route(
 	State(services): State<crate::State>,
-	ClientIp(client_ip): ClientIp,
+	ClientIp(client_ip): ClientIp, // NOTE: required for updating device metadata
 	body: Ruma<send_message_event::v3::Request>,
 ) -> Result<send_message_event::v3::Response> {
 	let sender_user = body.identity.expect_sender_user()?;

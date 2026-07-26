@@ -40,10 +40,32 @@ Matrix 聊天服务器（可以和全世界的 Matrix 用户互通，类似自�
 ssh root@你的服务器IP
 ```
 
-登录后，粘贴运行这一条命令：
+登录后有两种方式，任选一种。
+
+### 方式一（最省事）：一条命令全自动部署
+
+把域名和你的邮箱直接写在命令里，全程无需再操作：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.1/cinquain/bootstrap.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh \
+  | sudo sh -s -- matrix.example.com admin@example.com
+```
+
+把 `matrix.example.com` 换成你的 Matrix 域名，`admin@example.com` 换成你的邮箱
+（用于接收证书到期提醒）。
+
+它会自动装好依赖、检查 DNS 与端口、申请 HTTPS 证书、启动服务，最后直接打印
+**首次注册令牌**。看到令牌就说明成功了，可以跳到下面的「创建你的账户」。
+
+如果域名还没解析到这台服务器，或者 80/443 端口被别的程序占用，命令会立刻停下并
+告诉你具体原因——不会等到最后才失败。
+
+### 方式二：网页面板一步步来
+
+不写域名和邮箱，就只安装面板，在浏览器里填写：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mcxiaocaibug/Cinquain/cinquain-v0.0.2/cinquain/bootstrap.sh | sudo sh
 ```
 
 它会自动安装 Docker 等所有依赖，并启动一个**只有你能访问**的网页部署面板。
