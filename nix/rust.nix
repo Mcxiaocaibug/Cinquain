@@ -12,7 +12,7 @@
         target:
         target.fromToolchainName {
           name = (lib.importTOML "${inputs.self}/rust-toolchain.toml").toolchain.channel;
-          sha256 = "sha256-OATSZm98Es5kIFuqaba+UvkQtFsVgJEBMmS+t6od5/U=";
+          sha256 = "sha256-A1abGIbOtcBSdrUMhDGrER3pRM1hQP4fp9gh3Y4PKc8=";
         };
     in
     {
@@ -27,9 +27,9 @@
           inherit stable-toolchain;
 
           dev-toolchain = fnx.combine [
-            stable-toolchain
             # use the nightly rustfmt because we use nightly features
             fnx.complete.rustfmt
+            stable-toolchain
           ];
         };
     };

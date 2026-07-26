@@ -9,7 +9,6 @@ use std::{
 };
 
 use axum::extract::State;
-use axum_client_ip::ClientIp;
 use conduwuit::{
 	Err, Result, at, error, extract_variant,
 	utils::{
@@ -48,6 +47,7 @@ use crate::{
 		is_ignored_invite,
 		sync::v3::{joined::load_joined_room, left::load_left_room},
 	},
+	client_ip::ClientIp,
 };
 
 /// The default maximum number of events to return in the `timeline` key of
@@ -181,7 +181,7 @@ type PresenceUpdates = HashMap<OwnedUserId, PresenceEventContent>;
 )]
 pub(crate) async fn sync_events_route(
 	State(services): State<crate::State>,
-	ClientIp(client_ip): ClientIp,
+	ClientIp(client_ip): ClientIp, // NOTE: Required for updating device metadata
 	body: Ruma<sync_events::v3::Request>,
 ) -> Result<sync_events::v3::Response> {
 	let sender_user = body.identity.expect_sender_user()?;

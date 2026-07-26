@@ -2,10 +2,10 @@ use std::{any::Any, sync::Arc, time::Duration};
 
 use axum::{
 	Router,
-	extract::{DefaultBodyLimit, MatchedPath},
+	extract::{self, DefaultBodyLimit, FromRequestParts, MatchedPath, State},
 };
-use axum_client_ip::ClientIpSource;
 use conduwuit::{Result, Server, debug, error};
+use conduwuit_api::client_ip::ClientIp;
 use conduwuit_service::{Services, state::Guard};
 use http::{
 	HeaderValue, Method, StatusCode,
@@ -20,7 +20,6 @@ use tower_http::{
 	timeout::{RequestBodyTimeoutLayer, ResponseBodyTimeoutLayer, TimeoutLayer},
 	trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
-use tracing::Level;
 
 use crate::{request, router};
 
@@ -48,34 +47,18 @@ pub(crate) fn build(services: &Arc<Services>) -> Result<(Router, Guard)> {
 	))]
 	let layers = layers.layer(compression_layer(server));
 
-	let client_ip_layer = match services
-		.config
-		.request_ip_source
-		.as_ref()
-		.map(AsRef::as_ref)
-	{
-		| Some("cf_connecting_ip") => ClientIpSource::CfConnectingIp,
-		| Some("cloudfront_viewer_address") => ClientIpSource::CloudFrontViewerAddress,
-		| Some("fly_client_ip") => ClientIpSource::FlyClientIp,
-		| Some("x_forwarded_for") => ClientIpSource::RightmostXForwardedFor,
-		| Some("true_client_ip") => ClientIpSource::TrueClientIp,
-		| Some("x_envoy_external_address") => ClientIpSource::XEnvoyExternalAddress,
-		| Some("x_real_ip") => ClientIpSource::XRealIp,
-		| None | Some(_) => ClientIpSource::ConnectInfo,
-	};
-
 	let services_ = services.clone();
 	let layers = layers
 		.layer(SetSensitiveHeadersLayer::new([header::AUTHORIZATION]))
 		.layer(
 			TraceLayer::new_for_http()
 				.make_span_with(tracing_span::<_>)
-				.on_failure(DefaultOnFailure::new().level(Level::ERROR))
-				.on_request(DefaultOnRequest::new().level(Level::TRACE))
-				.on_response(DefaultOnResponse::new().level(Level::DEBUG)),
+				.on_failure(DefaultOnFailure::new().level(tracing::Level::ERROR))
+				.on_request(DefaultOnRequest::new().level(tracing::Level::TRACE))
+				.on_response(DefaultOnResponse::new().level(tracing::Level::DEBUG)),
 		)
+		.layer(axum::middleware::from_fn_with_state(Arc::clone(services), request_ip))
 		.layer(axum::middleware::from_fn_with_state(Arc::clone(services), request::handle))
-		.layer(client_ip_layer.into_extension())
 		.layer(ResponseBodyTimeoutLayer::new(Duration::from_secs(
 			server.config.client_response_timeout,
 		)))
@@ -230,9 +213,24 @@ fn tracing_span<T>(request: &http::Request<T>) -> tracing::Span {
 		parent: None,
 		debug::INFO_SPAN_LEVEL,
 		"router",
+		ip=tracing::field::Empty,
 		method = %request.method(),
 		%path,
 	}
+}
+
+/// Annotates the tracing span with the client IP
+async fn request_ip(
+	State(services): State<Arc<Services>>,
+	request: extract::Request,
+	next: axum::middleware::Next,
+) -> axum::response::Response {
+	let (mut parts, body) = request.into_parts();
+	if let Ok(ip) = ClientIp::from_request_parts(&mut parts, &services).await {
+		let span = tracing::Span::current();
+		span.record("ip", ip.0.to_string());
+	}
+	next.run(extract::Request::from_parts(parts, body)).await
 }
 
 fn request_path_str<T>(request: &http::Request<T>) -> &str {
