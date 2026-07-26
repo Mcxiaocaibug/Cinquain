@@ -52,7 +52,13 @@ jobs:
           test -x cinquain/bootstrap.sh
           test -x cinquain/install.sh
           test -x cinquain/cinquain
-          test "$(cat cinquain/VERSION)" = "0.0.1"
+          # Assert the shape of the version and that every copy of it agrees,
+          # rather than pinning a literal that has to be edited on every bump.
+          version=$(cat cinquain/VERSION)
+          grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' cinquain/VERSION
+          grep -qx "CINQUAIN_VERSION=$version" cinquain/.env.example
+          grep -qx "VERSION=$version" cinquain/bootstrap.sh
+          grep -q "^## $version " cinquain/CHANGELOG.md
 
   image:
     name: Build release image (${{ matrix.platform }})
@@ -72,6 +78,10 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve product version
+        id: version
+        run: echo "value=$(cat cinquain/VERSION)" >> "$GITHUB_OUTPUT"
+
       - name: Build without publishing
         uses: docker/build-push-action@v6
         with:
@@ -79,11 +89,61 @@ jobs:
           file: docker/Dockerfile
           platforms: ${{ matrix.platform }}
           push: false
+          # Keep the native build in the local daemon so the next step can prove
+          # the image actually boots. Release used to publish an image that
+          # nothing had ever started.
+          load: ${{ matrix.platform == 'linux/amd64' }}
+          tags: cinquain-ci:${{ steps.version.outputs.value }}
           cache-from: type=gha,scope=cinquain-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=cinquain-${{ matrix.platform }}
           build-args: |
-            CONTINUWUITY_VERSION_EXTRA=+cinquain.0.0.1
+            CONTINUWUITY_VERSION_EXTRA=+cinquain.${{ steps.version.outputs.value }}
             GIT_COMMIT_HASH=${{ github.sha }}
             GIT_COMMIT_HASH_SHORT=${{ github.sha }}
             GIT_REMOTE_URL=https://github.com/${{ github.repository }}
             GIT_REMOTE_COMMIT_URL=https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+
+      - name: Prove the image boots and serves Matrix
+        if: matrix.platform == 'linux/amd64'
+        run: |
+          set -eu
+          cat > "$RUNNER_TEMP/continuwuity.toml" <<'TOML'
+          [global]
+          server_name = "matrix.example.test"
+          database_path = "/var/lib/continuwuity"
+          address = ["0.0.0.0"]
+          port = 8008
+          allow_registration = false
+          allow_federation = false
+          TOML
+          docker run -d --name cinquain-boot \
+            -e CONTINUWUITY_CONFIG=/etc/continuwuity/continuwuity.toml \
+            -v "$RUNNER_TEMP/continuwuity.toml:/etc/continuwuity/continuwuity.toml:ro" \
+            -v cinquain-boot-data:/var/lib/continuwuity \
+            -p 8008:8008 \
+            "cinquain-ci:${{ steps.version.outputs.value }}"
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8008/_matrix/client/versions | grep -q '"versions"'; then
+              echo "image serves /_matrix/client/versions"
+              # `cinquain token` recovers the single-use first-admin token by
+              # scraping this banner out of the container log. Fail the build if
+              # upstream rewords it, instead of shipping a broken onboarding step.
+              docker logs cinquain-boot 2>&1 \
+                | sed "s/$(printf '\033')\[[0-9;]*[a-zA-Z]//g" \
+                | grep -q 'using the registration token [A-Za-z0-9][A-Za-z0-9]* \.' \
+                || { echo "first-run banner missing or reworded upstream" >&2; exit 1; }
+              echo "first-run token banner is parseable"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "image failed to serve Matrix within 120s" >&2
+          docker logs cinquain-boot >&2 || true
+          exit 1
+
+      - name: Collect boot diagnostics
+        if: always() && matrix.platform == 'linux/amd64'
+        run: |
+          docker logs cinquain-boot 2>&1 | tail -50 || true
+          docker rm -f cinquain-boot || true
+          docker volume rm -f cinquain-boot-data || true
