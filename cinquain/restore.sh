@@ -13,10 +13,17 @@ require_config
 require_docker
 require_tool tar
 
+# A missing sidecar used to mean "skip verification", which silently accepted
+# truncated archives and wiped the live volumes with partial data.
 if [ -f "$archive.sha256" ]; then
     expected=$(awk '{print $1}' "$archive.sha256")
     actual=$(sha256_file "$archive")
     [ "$expected" = "$actual" ] || die "备份校验和不匹配，拒绝恢复。"
+    info "归档校验和匹配"
+elif [ "${CINQUAIN_SKIP_CHECKSUM:-0}" = "1" ]; then
+    warn "缺少 $archive.sha256，已按 CINQUAIN_SKIP_CHECKSUM=1 跳过完整性校验。"
+else
+    die "缺少校验文件 $archive.sha256，无法确认归档完整。确认来源可信后可设置 CINQUAIN_SKIP_CHECKSUM=1 强制恢复。"
 fi
 
 listing=$(tar -tzf "$archive") || die "无法读取备份归档。"
